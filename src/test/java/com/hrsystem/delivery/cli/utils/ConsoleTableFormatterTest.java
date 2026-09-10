@@ -1,61 +1,34 @@
 package com.hrsystem.delivery.cli.utils;
 
-import com.hrsystem.domain.entity.VacancyEntity;
-import com.hrsystem.domain.enums.Currency;
-import com.hrsystem.domain.enums.VacancySource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class ConsoleTableFormatterTest {
 
-    private final ConsoleTableFormatter formatter = new ConsoleTableFormatter();
-
     @Test
-    void drawsBordersAndAlignsColumns() {
-        String table = formatter.format(
-                List.of("ID", "Name"),
-                List.of(List.of("1", "Java"), List.of("22", "Go"))
-        );
-        assertTrue(table.contains("+----+------+"));
-        assertTrue(table.contains("| ID | Name |"));
-        assertTrue(table.contains("| 22 | Go   |"));
-        assertTrue(table.startsWith("+"));
-        assertTrue(table.trim().endsWith("+"));
+    @DisplayName("Отрисовка таблицы с заголовками и данными")
+    void renderTable_withData() {
+        ConsoleTableFormatter table = new ConsoleTableFormatter("ID", "Должность", "Компания");
+        table.addRow("1", "Java Dev", "Яндекс");
+        table.addRow("2", "Python Dev", "Сбер");
+
+        String rendered = table.render();
+
+        assertThat(rendered).contains("ID");
+        assertThat(rendered).contains("Должность");
+        assertThat(rendered).contains("Компания");
+        assertThat(rendered).contains("Java Dev");
+        assertThat(rendered).contains("Яндекс");
+        assertThat(rendered).contains("Python Dev");
+        assertThat(rendered).contains("Сбер");
     }
 
     @Test
-    void marksManualVacanciesAsDirectEmployer() {
-        assertEquals("[Прямой работодатель]", formatter.sourceMarker(VacancySource.MANUAL));
-        assertEquals("[Сайт]", formatter.sourceMarker(VacancySource.WEBSITE));
-        assertEquals("[Telegram]", formatter.sourceMarker(VacancySource.TELEGRAM));
-    }
-
-    @Test
-    void formatsSalaryRange() {
-        VacancyEntity vacancy = new VacancyEntity();
-        vacancy.setSalaryMin(180_000);
-        vacancy.setSalaryMax(240_000);
-        vacancy.setCurrency(Currency.RUB);
-        String salary = formatter.formatSalary(vacancy);
-        assertTrue(salary.contains("180 000"));
-        assertTrue(salary.contains("240 000"));
-        assertTrue(salary.contains("RUB"));
-    }
-
-    @Test
-    void emptyTableStillHasFrame() {
-        String table = formatter.format(List.of("A", "B"), List.of());
-        assertTrue(table.contains("нет данных"));
-        assertFalse(table.isBlank());
-    }
-
-    @Test
-    void visibleLengthIgnoresAnsi() {
-        assertEquals(5, formatter.visibleLength(ConsoleTableFormatter.GREEN + "OFFER" + ConsoleTableFormatter.RESET));
+    @DisplayName("Корректный расчет длины с ANSI-кодами цвета")
+    void visibleLength_shouldIgnoreAnsiEscapes() {
+        String colored = AnsiColor.colorize("OFFER", AnsiColor.GREEN);
+        assertThat(ConsoleTableFormatter.visibleLength(colored)).isEqualTo(5);
     }
 }

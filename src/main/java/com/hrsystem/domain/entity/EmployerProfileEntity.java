@@ -1,18 +1,8 @@
 package com.hrsystem.domain.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-
+import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @Table(name = "employer_profiles")
@@ -22,7 +12,7 @@ public class EmployerProfileEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @OneToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private UserEntity user;
 
@@ -35,16 +25,26 @@ public class EmployerProfileEntity {
     @Column(name = "website_url", length = 255)
     private String websiteUrl;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    public EmployerProfileEntity() {
+    }
+
+    public EmployerProfileEntity(UserEntity user, String companyName, String contactPerson, String websiteUrl) {
+        this.user = user;
+        this.companyName = companyName;
+        this.contactPerson = contactPerson;
+        this.websiteUrl = websiteUrl;
+    }
+
     @PrePersist
     @PreUpdate
-    void touch() {
-        updatedAt = Instant.now();
+    protected void onPersistOrUpdate() {
+        this.updatedAt = Instant.now();
     }
 
     public Long getId() {
@@ -101,5 +101,27 @@ public class EmployerProfileEntity {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        EmployerProfileEntity that = (EmployerProfileEntity) o;
+        return Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    @Override
+    public String toString() {
+        return "EmployerProfileEntity{" +
+                "id=" + id +
+                ", companyName='" + companyName + '\'' +
+                ", contactPerson='" + contactPerson + '\'' +
+                '}';
     }
 }

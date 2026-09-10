@@ -1,23 +1,11 @@
 package com.hrsystem.domain.entity;
 
 import com.hrsystem.domain.enums.ApplicationStatus;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
+import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 
 @Entity
 @Table(name = "applications")
@@ -27,11 +15,11 @@ public class ApplicationEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "vacancy_id", nullable = false)
     private VacancyEntity vacancy;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "candidate_id", nullable = false)
     private CandidateProfileEntity candidate;
 
@@ -39,29 +27,48 @@ public class ApplicationEntity {
     private String coverLetter;
 
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(nullable = false, columnDefinition = "application_status_enum")
+    @Column(name = "status", nullable = false, length = 50)
     private ApplicationStatus status = ApplicationStatus.APPLIED;
 
     @Column(name = "status_comment", columnDefinition = "TEXT")
     private String statusComment;
 
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    public ApplicationEntity() {
+    }
+
+    public ApplicationEntity(VacancyEntity vacancy, CandidateProfileEntity candidate, String coverLetter) {
+        this.vacancy = vacancy;
+        this.candidate = candidate;
+        this.coverLetter = coverLetter;
+        this.status = ApplicationStatus.APPLIED;
+    }
+
     @PrePersist
-    void onCreate() {
+    protected void onCreate() {
         Instant now = Instant.now();
-        createdAt = now;
-        updatedAt = now;
+        this.createdAt = now;
+        this.updatedAt = now;
+        if (this.status == null) {
+            this.status = ApplicationStatus.APPLIED;
+        }
     }
 
     @PreUpdate
-    void onUpdate() {
-        updatedAt = Instant.now();
+    protected void onUpdate() {
+        this.updatedAt = Instant.now();
+    }
+
+    public String formatCreatedAt() {
+        if (createdAt == null) return "-";
+        return DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+                .withZone(ZoneId.systemDefault())
+                .format(createdAt);
     }
 
     public Long getId() {
@@ -86,6 +93,14 @@ public class ApplicationEntity {
 
     public void setCandidate(CandidateProfileEntity candidate) {
         this.candidate = candidate;
+    }
+
+    public CandidateProfileEntity getCandidateProfile() {
+        return candidate;
+    }
+
+    public void setCandidateProfile(CandidateProfileEntity candidateProfile) {
+        this.candidate = candidateProfile;
     }
 
     public String getCoverLetter() {
@@ -116,7 +131,37 @@ public class ApplicationEntity {
         return createdAt;
     }
 
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ApplicationEntity that = (ApplicationEntity) o;
+        return Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    @Override
+    public String toString() {
+        return "ApplicationEntity{" +
+                "id=" + id +
+                ", status=" + status +
+                ", createdAt=" + createdAt +
+                '}';
     }
 }

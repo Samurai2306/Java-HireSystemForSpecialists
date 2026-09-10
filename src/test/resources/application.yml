@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: hr-system-test
+  datasource:
+    url: jdbc:h2:mem:hr_system_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    show-sql: false
+  flyway:
+    enabled: false
+
+hr:
+  scraper:
+    user-agent: "Mozilla/5.0"
+    connect-timeout-ms: 2000
+    read-timeout-ms: 2000
+    request-delay-ms: 100
+    max-pages: 2
+    max-retries: 1
+
+logging:
+  level:
+    root: WARN
+    com.hrsystem: INFO

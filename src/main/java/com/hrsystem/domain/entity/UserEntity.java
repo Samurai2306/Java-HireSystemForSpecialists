@@ -1,20 +1,9 @@
 package com.hrsystem.domain.entity;
 
 import com.hrsystem.domain.enums.UserRole;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
+import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @Table(name = "users")
@@ -24,36 +13,48 @@ public class UserEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 255)
+    @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(nullable = false, columnDefinition = "user_role_enum")
-    private UserRole role;
+    @Column(name = "role", nullable = false, length = 50)
+    private UserRole role = UserRole.CANDIDATE;
 
     @Column(name = "is_active", nullable = false)
-    private boolean active = true;
+    private Boolean isActive = true;
 
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    public UserEntity() {
+    }
+
+    public UserEntity(String email, String passwordHash, UserRole role) {
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.role = role;
+        this.isActive = true;
+    }
+
     @PrePersist
-    void onCreate() {
+    protected void onCreate() {
         Instant now = Instant.now();
-        createdAt = now;
-        updatedAt = now;
+        this.createdAt = now;
+        this.updatedAt = now;
+        if (this.isActive == null) {
+            this.isActive = true;
+        }
     }
 
     @PreUpdate
-    void onUpdate() {
-        updatedAt = Instant.now();
+    protected void onUpdate() {
+        this.updatedAt = Instant.now();
     }
 
     public Long getId() {
@@ -88,12 +89,20 @@ public class UserEntity {
         this.role = role;
     }
 
+    public Boolean getIsActive() {
+        return isActive;
+    }
+
+    public void setIsActive(Boolean active) {
+        this.isActive = active;
+    }
+
     public boolean isActive() {
-        return active;
+        return Boolean.TRUE.equals(this.isActive);
     }
 
     public void setActive(boolean active) {
-        this.active = active;
+        this.isActive = active;
     }
 
     public Instant getCreatedAt() {
@@ -110,5 +119,40 @@ public class UserEntity {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public boolean isCandidate() {
+        return UserRole.CANDIDATE.equals(this.role);
+    }
+
+    public boolean isEmployer() {
+        return UserRole.EMPLOYER.equals(this.role);
+    }
+
+    public boolean isAdmin() {
+        return UserRole.ADMIN.equals(this.role);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        UserEntity that = (UserEntity) o;
+        return Objects.equals(id, that.id) && Objects.equals(email, that.email);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, email);
+    }
+
+    @Override
+    public String toString() {
+        return "UserEntity{" +
+                "id=" + id +
+                ", email='" + email + '\'' +
+                ", role=" + role +
+                ", isActive=" + isActive +
+                '}';
     }
 }

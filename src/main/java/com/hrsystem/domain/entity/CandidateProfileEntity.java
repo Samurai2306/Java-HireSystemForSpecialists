@@ -1,18 +1,8 @@
 package com.hrsystem.domain.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-
+import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @Table(name = "candidate_profiles")
@@ -22,7 +12,7 @@ public class CandidateProfileEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @OneToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private UserEntity user;
 
@@ -32,13 +22,13 @@ public class CandidateProfileEntity {
     @Column(name = "target_title", length = 255)
     private String targetTitle;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "skills", columnDefinition = "TEXT")
     private String skills;
 
-    @Column(length = 100)
+    @Column(name = "phone", length = 100)
     private String phone;
 
-    @Column(length = 100)
+    @Column(name = "telegram", length = 100)
     private String telegram;
 
     @Column(name = "portfolio_links", columnDefinition = "TEXT")
@@ -47,10 +37,22 @@ public class CandidateProfileEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    public CandidateProfileEntity() {
+    }
+
+    public CandidateProfileEntity(UserEntity user, String fullName, String targetTitle, String skills, String phone, String telegram) {
+        this.user = user;
+        this.fullName = fullName;
+        this.targetTitle = targetTitle;
+        this.skills = skills;
+        this.phone = phone;
+        this.telegram = telegram;
+    }
+
     @PrePersist
     @PreUpdate
-    void touch() {
-        updatedAt = Instant.now();
+    protected void onPersistOrUpdate() {
+        this.updatedAt = Instant.now();
     }
 
     public Long getId() {
@@ -123,5 +125,30 @@ public class CandidateProfileEntity {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CandidateProfileEntity that = (CandidateProfileEntity) o;
+        return Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    @Override
+    public String toString() {
+        return "CandidateProfileEntity{" +
+                "id=" + id +
+                ", fullName='" + fullName + '\'' +
+                ", targetTitle='" + targetTitle + '\'' +
+                ", skills='" + skills + '\'' +
+                ", phone='" + phone + '\'' +
+                ", telegram='" + telegram + '\'' +
+                '}';
     }
 }

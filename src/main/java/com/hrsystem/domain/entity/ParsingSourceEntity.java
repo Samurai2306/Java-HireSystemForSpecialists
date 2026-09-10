@@ -1,18 +1,7 @@
 package com.hrsystem.domain.entity;
 
 import com.hrsystem.domain.enums.VacancySource;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
+import jakarta.persistence.*;
 import java.time.Instant;
 
 @Entity
@@ -27,8 +16,7 @@ public class ParsingSourceEntity {
     private String name;
 
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "source_type", nullable = false, columnDefinition = "source_type_enum")
+    @Column(name = "source_type", nullable = false, length = 50)
     private VacancySource sourceType;
 
     @Column(name = "base_url", nullable = false, unique = true, length = 500)
@@ -40,7 +28,7 @@ public class ParsingSourceEntity {
     @Column(name = "last_scraped_at")
     private Instant lastScrapedAt;
 
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @PrePersist

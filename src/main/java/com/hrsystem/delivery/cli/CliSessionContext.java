@@ -10,52 +10,113 @@ import org.springframework.stereotype.Component;
 public class CliSessionContext {
 
     private UserEntity currentUser;
-    private CandidateProfileEntity candidateProfile;
-    private EmployerProfileEntity employerProfile;
+    private CandidateProfileEntity currentCandidateProfile;
+    private EmployerProfileEntity currentEmployerProfile;
 
-    public void login(UserEntity user, CandidateProfileEntity candidateProfile, EmployerProfileEntity employerProfile) {
+    public CliSessionContext() {
+    }
+
+    public synchronized void login(UserEntity user, CandidateProfileEntity candidateProfile, EmployerProfileEntity employerProfile) {
         this.currentUser = user;
-        this.candidateProfile = candidateProfile;
-        this.employerProfile = employerProfile;
+        this.currentCandidateProfile = candidateProfile;
+        this.currentEmployerProfile = employerProfile;
     }
 
-    public void logout() {
+    public synchronized void setCandidateSession(UserEntity user, CandidateProfileEntity candidateProfile) {
+        this.currentUser = user;
+        this.currentCandidateProfile = candidateProfile;
+        this.currentEmployerProfile = null;
+    }
+
+    public synchronized void setEmployerSession(UserEntity user, EmployerProfileEntity employerProfile) {
+        this.currentUser = user;
+        this.currentCandidateProfile = null;
+        this.currentEmployerProfile = employerProfile;
+    }
+
+    public synchronized void setAdminSession(UserEntity user) {
+        this.currentUser = user;
+        this.currentCandidateProfile = null;
+        this.currentEmployerProfile = null;
+    }
+
+    public synchronized void updateCandidateProfile(CandidateProfileEntity profile) {
+        this.currentCandidateProfile = profile;
+    }
+
+    public synchronized void logout() {
         this.currentUser = null;
-        this.candidateProfile = null;
-        this.employerProfile = null;
+        this.currentCandidateProfile = null;
+        this.currentEmployerProfile = null;
     }
 
-    public boolean isAuthenticated() {
+    public synchronized boolean isAuthorized() {
         return currentUser != null;
     }
 
-    public UserEntity getCurrentUser() {
-        return currentUser;
+    public synchronized boolean isAuthenticated() {
+        return currentUser != null;
     }
 
-    public UserRole getRole() {
+    public synchronized boolean isGuest() {
+        return currentUser == null;
+    }
+
+    public synchronized boolean isCandidate() {
+        return isAuthorized() && UserRole.CANDIDATE.equals(currentUser.getRole());
+    }
+
+    public synchronized boolean isEmployer() {
+        return isAuthorized() && UserRole.EMPLOYER.equals(currentUser.getRole());
+    }
+
+    public synchronized boolean isAdmin() {
+        return isAuthorized() && UserRole.ADMIN.equals(currentUser.getRole());
+    }
+
+    public synchronized UserRole getCurrentRole() {
+        return currentUser != null ? currentUser.getRole() : UserRole.GUEST;
+    }
+
+    public synchronized UserRole getRole() {
         return currentUser == null ? null : currentUser.getRole();
     }
 
-    public CandidateProfileEntity getCandidateProfile() {
-        return candidateProfile;
+    public synchronized UserEntity getCurrentUser() {
+        return currentUser;
     }
 
-    public EmployerProfileEntity getEmployerProfile() {
-        return employerProfile;
+    public synchronized Long getCurrentUserId() {
+        return currentUser != null ? currentUser.getId() : null;
     }
 
-    public Long requireCandidateId() {
-        if (candidateProfile == null) {
+    public synchronized CandidateProfileEntity getCurrentCandidateProfile() {
+        return currentCandidateProfile;
+    }
+
+    public synchronized CandidateProfileEntity getCandidateProfile() {
+        return currentCandidateProfile;
+    }
+
+    public synchronized EmployerProfileEntity getCurrentEmployerProfile() {
+        return currentEmployerProfile;
+    }
+
+    public synchronized EmployerProfileEntity getEmployerProfile() {
+        return currentEmployerProfile;
+    }
+
+    public synchronized Long requireCandidateId() {
+        if (currentCandidateProfile == null) {
             throw new IllegalStateException("Сессия соискателя не инициализирована");
         }
-        return candidateProfile.getId();
+        return currentCandidateProfile.getId();
     }
 
-    public Long requireEmployerId() {
-        if (employerProfile == null) {
+    public synchronized Long requireEmployerId() {
+        if (currentEmployerProfile == null) {
             throw new IllegalStateException("Сессия работодателя не инициализирована");
         }
-        return employerProfile.getId();
+        return currentEmployerProfile.getId();
     }
 }
