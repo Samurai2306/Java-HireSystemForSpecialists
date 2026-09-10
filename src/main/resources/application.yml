@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: hr-system
+  main:
+    banner-mode: off
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:hr_system_db}
+    username: ${DB_USER:hr_user}
+    password: ${DB_PASSWORD:hr_password}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        format_sql: false
+        type:
+          preferred_enum_jdbc_type: NAMED_ENUM
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+logging:
+  level:
+    root: WARN
+    com.hrsystem: INFO
+    org.flywaydb: INFO
+
+hr:
+  scraper:
+    user-agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+    connect-timeout-ms: 10000
+    read-timeout-ms: 10000
+    request-delay-ms: 500
+    max-pages: 5
+    max-retries: 3
