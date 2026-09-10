@@ -24,6 +24,7 @@ public class ScraperCoordinatorService {
     private final ParsingLogRepository parsingLogRepository;
     private final VacancyRepository vacancyRepository;
     private final HtmlWebScraper htmlWebScraper;
+    private final HhRuScraper hhRuScraper;
     private final TelegramMirrorScraper telegramMirrorScraper;
     private final TextCleaner textCleaner;
     private final SalaryParser salaryParser;
@@ -33,6 +34,7 @@ public class ScraperCoordinatorService {
                                      ParsingLogRepository parsingLogRepository,
                                      VacancyRepository vacancyRepository,
                                      HtmlWebScraper htmlWebScraper,
+                                     HhRuScraper hhRuScraper,
                                      TelegramMirrorScraper telegramMirrorScraper,
                                      TextCleaner textCleaner,
                                      SalaryParser salaryParser,
@@ -41,6 +43,7 @@ public class ScraperCoordinatorService {
         this.parsingLogRepository = parsingLogRepository;
         this.vacancyRepository = vacancyRepository;
         this.htmlWebScraper = htmlWebScraper;
+        this.hhRuScraper = hhRuScraper;
         this.telegramMirrorScraper = telegramMirrorScraper;
         this.textCleaner = textCleaner;
         this.salaryParser = salaryParser;
@@ -105,9 +108,14 @@ public class ScraperCoordinatorService {
         log.setSource(source);
         log.setStartedAt(started);
         try {
-            List<RawParsedVacancyDto> rawItems = source.getSourceType() == VacancySource.TELEGRAM
-                    ? telegramMirrorScraper.scrape(source)
-                    : htmlWebScraper.scrape(source);
+            List<RawParsedVacancyDto> rawItems;
+            if (source.getSourceType() == VacancySource.TELEGRAM) {
+                rawItems = telegramMirrorScraper.scrape(source);
+            } else if (source.getBaseUrl() != null && source.getBaseUrl().contains("hh.ru")) {
+                rawItems = hhRuScraper.parseHh("java", 0);
+            } else {
+                rawItems = htmlWebScraper.scrape(source);
+            }
             if (source.getSourceType() == VacancySource.WEBSITE) {
                 report.setPagesVisited(htmlWebScraper.lastVisitedPagesEstimate());
             } else {

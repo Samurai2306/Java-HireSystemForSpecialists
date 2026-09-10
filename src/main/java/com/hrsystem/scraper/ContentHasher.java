@@ -22,6 +22,10 @@ public class ContentHasher {
         }
     }
 
+    public String calculateHash(String title, String company, String description) {
+        return fingerprint(title, company, description);
+    }
+
     public String normalize(String value) {
         if (value == null) {
             return "";
