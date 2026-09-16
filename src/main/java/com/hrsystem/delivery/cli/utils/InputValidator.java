@@ -19,8 +19,7 @@ public class InputValidator {
     }
 
     public InputValidator(InputStream in, PrintStream out) {
-        this.scanner = new Scanner(in);
-        this.out = out;
+        this(new Scanner(in), out);
     }
 
     public InputValidator(Scanner scanner, PrintStream out) {
@@ -30,16 +29,15 @@ public class InputValidator {
 
     public String readNonEmptyString(String prompt) {
         while (true) {
-            out.print(prompt);
-            out.flush();
-            if (!scanner.hasNextLine()) {
+            String line = readRaw(prompt);
+            if (line == null) {
                 return "";
             }
-            String line = scanner.nextLine().trim();
+            line = line.trim();
             if (!line.isEmpty()) {
                 return line;
             }
-            out.println(AnsiColor.error("Поле не может быть пустым. Повторите ввод."));
+            error("Поле не может быть пустым. Повторите ввод.");
         }
     }
 
@@ -48,59 +46,50 @@ public class InputValidator {
     }
 
     public String readOptionalString(String prompt, String defaultValue) {
-        out.print(prompt);
-        out.flush();
-        if (!scanner.hasNextLine()) {
+        String line = readRaw(prompt);
+        if (line == null) {
             return defaultValue;
         }
-        String line = scanner.nextLine().trim();
+        line = line.trim();
         return line.isEmpty() ? defaultValue : line;
     }
 
     public String readOptionalString(String prompt) {
-        out.print(prompt);
-        out.flush();
-        if (!scanner.hasNextLine()) {
-            return "";
-        }
-        return scanner.nextLine().trim();
+        return readOptionalString(prompt, "");
     }
 
     public int readIntInRange(String prompt, int min, int max) {
         while (true) {
-            out.print(prompt);
-            out.flush();
-            if (!scanner.hasNextLine()) {
+            String line = readRaw(prompt);
+            if (line == null) {
                 return min;
             }
-            String line = scanner.nextLine().trim();
             try {
-                int value = Integer.parseInt(line);
+                int value = Integer.parseInt(line.trim());
                 if (value >= min && value <= max) {
                     return value;
                 }
-                out.println(AnsiColor.error(String.format("Число должно быть в диапазоне от %d до %d.", min, max)));
+                error("Число должно быть в диапазоне от " + min + " до " + max + ".");
             } catch (NumberFormatException e) {
-                out.println(AnsiColor.error("Некорректный ввод! Введите целое число."));
+                error("Некорректный ввод! Введите целое число.");
             }
         }
     }
 
     public Integer readOptionalInt(String prompt, Integer defaultValue) {
         while (true) {
-            out.print(prompt);
-            out.flush();
-            if (!scanner.hasNextLine()) {
+            String line = readRaw(prompt);
+            if (line == null) {
                 return defaultValue;
             }
-            String line = scanner.nextLine().trim();
+            line = line.trim();
             if (line.isEmpty()) {
                 return defaultValue;
             }
             try {
                 return Integer.parseInt(line);
             } catch (NumberFormatException e) {
-                out.println(AnsiColor.error("Некорректный ввод! Введите целое число или нажмите Enter для пропуска."));
+                error("Некорректный ввод! Введите целое число или нажмите Enter для пропуска.");
             }
         }
     }
@@ -111,16 +100,14 @@ public class InputValidator {
 
     public long readLong(String prompt) {
         while (true) {
-            out.print(prompt);
-            out.flush();
-            if (!scanner.hasNextLine()) {
+            String line = readRaw(prompt);
+            if (line == null) {
                 return 0L;
             }
-            String line = scanner.nextLine().trim();
             try {
-                return Long.parseLong(line);
+                return Long.parseLong(line.trim());
             } catch (NumberFormatException ex) {
-                out.println(AnsiColor.error("Ожидается целое число (ID)"));
+                error("Ожидается целое число (ID)");
             }
         }
     }
@@ -131,7 +118,7 @@ public class InputValidator {
             if (isEmail(email)) {
                 return email.toLowerCase(Locale.ROOT);
             }
-            out.println(AnsiColor.error("Неверный формат email (пример: user@domain.com). Повторите ввод."));
+            error("Неверный формат email (пример: user@domain.com). Повторите ввод.");
         }
     }
 
@@ -141,52 +128,40 @@ public class InputValidator {
             if (isUrl(value)) {
                 return value;
             }
-            out.println(AnsiColor.error("URL должен начинаться с http:// или https://"));
+            error("URL должен начинаться с http:// или https://");
         }
     }
 
     public String readPassword(String prompt) {
         while (true) {
-            out.print(prompt);
-            out.flush();
-            if (!scanner.hasNextLine()) {
+            String password = readRaw(prompt);
+            if (password == null) {
                 return "";
             }
-            String password = scanner.nextLine();
-            if (password != null && password.trim().length() >= 4) {
-                return password.trim();
+            password = password.trim();
+            if (password.length() >= 4) {
+                return password;
             }
-            out.println(AnsiColor.error("Пароль должен содержать не менее 4 символов. Повторите ввод."));
+            error("Пароль должен содержать не менее 4 символов. Повторите ввод.");
         }
     }
 
     public String readCommand(String prompt) {
-        out.print(prompt);
-        out.flush();
-        if (!scanner.hasNextLine()) {
-            return "";
-        }
-        return scanner.nextLine().trim();
+        String line = readRaw(prompt);
+        return line == null ? "" : line.trim();
     }
 
     public boolean readConfirmation(String prompt, boolean defaultYes) {
-        String hint = defaultYes ? "[Y/n]" : "[y/N]";
-        out.print(prompt + " " + hint + ": ");
-        out.flush();
-        if (!scanner.hasNextLine()) {
+        String line = readRaw(prompt + " " + (defaultYes ? "[Y/n]" : "[y/N]") + ": ");
+        if (line == null || line.isBlank()) {
             return defaultYes;
         }
-        String line = scanner.nextLine().trim().toLowerCase();
-        if (line.isEmpty()) {
-            return defaultYes;
-        }
+        line = line.trim().toLowerCase(Locale.ROOT);
         return line.startsWith("y") || line.startsWith("д") || line.equals("1");
     }
 
     public boolean confirm(String prompt) {
-        String answer = readOptionalString(prompt + " [y/N]: ");
-        return answer.equalsIgnoreCase("y") || answer.equalsIgnoreCase("yes")
-                || answer.equalsIgnoreCase("д") || answer.equalsIgnoreCase("да");
+        return readConfirmation(prompt, false);
     }
 
     public boolean isEmail(String value) {
@@ -195,5 +170,15 @@ public class InputValidator {
 
     public boolean isUrl(String value) {
         return value != null && URL_PATTERN.matcher(value.trim()).matches();
+    }
+
+    private String readRaw(String prompt) {
+        out.print(prompt);
+        out.flush();
+        return scanner.hasNextLine() ? scanner.nextLine() : null;
+    }
+
+    private void error(String message) {
+        out.println(AnsiColor.error(message));
     }
 }

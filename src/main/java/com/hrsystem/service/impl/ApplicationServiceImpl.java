@@ -55,31 +55,10 @@ public class ApplicationServiceImpl implements ApplicationService {
         ApplicationEntity application = applicationRepository.findWithDetailsById(applicationId)
                 .orElseThrow(() -> new EntityNotFoundException("Отклик #" + applicationId + " не найден"));
 
-        if (actorRole == UserRole.CANDIDATE) {
-            CandidateProfileEntity profile = candidateProfileRepository.findByUserId(actorUserId)
-                    .orElseThrow(() -> new AccessDeniedException("Профиль соискателя не найден"));
-            if (!profile.getId().equals(application.getCandidate().getId())) {
-                throw new AccessDeniedException("Нельзя изменять чужой отклик");
-            }
-        } else if (actorRole == UserRole.EMPLOYER) {
-            EmployerProfileEntity employer = employerProfileRepository.findByUserId(actorUserId)
-                    .orElseThrow(() -> new AccessDeniedException("Профиль работодателя не найден"));
-            VacancyEntity vacancy = application.getVacancy();
-            if (vacancy.getEmployer() == null || !employer.getId().equals(vacancy.getEmployer().getId())) {
-                throw new AccessDeniedException("Нельзя менять статус отклика на чужую вакансию");
-            }
-        } else {
-            throw new AccessDeniedException("Смена статуса отклика недоступна для роли " + actorRole);
-        }
-
+        assertOwns(application, actorUserId, actorRole);
         stateMachine.validate(application.getStatus(), targetStatus);
+        assertAllowedTarget(actorRole, targetStatus);
 
-        if (actorRole == UserRole.CANDIDATE && targetStatus != ApplicationStatus.WITHDRAWN) {
-            throw new AccessDeniedException("Соискатель может только отозвать свой отклик");
-        }
-        if (actorRole == UserRole.EMPLOYER && !EMPLOYER_TARGETS.contains(targetStatus)) {
-            throw new AccessDeniedException("Работодатель не может установить статус " + targetStatus);
-        }
         application.setStatus(targetStatus);
         if (comment != null && !comment.isBlank()) {
             application.setStatusComment(comment.trim());
@@ -115,5 +94,35 @@ public class ApplicationServiceImpl implements ApplicationService {
                 .orElseThrow(() -> new EntityNotFoundException("Профиль соискателя не найден"));
         return changeStatus(applicationId, ApplicationStatus.WITHDRAWN, "Отзыв соискателем",
                 candidate.getUser().getId(), UserRole.CANDIDATE);
+    }
+
+    private void assertOwns(ApplicationEntity application, Long actorUserId, UserRole actorRole) {
+        if (actorRole == UserRole.CANDIDATE) {
+            CandidateProfileEntity profile = candidateProfileRepository.findByUserId(actorUserId)
+                    .orElseThrow(() -> new AccessDeniedException("Профиль соискателя не найден"));
+            if (!profile.getId().equals(application.getCandidate().getId())) {
+                throw new AccessDeniedException("Нельзя изменять чужой отклик");
+            }
+            return;
+        }
+        if (actorRole == UserRole.EMPLOYER) {
+            EmployerProfileEntity employer = employerProfileRepository.findByUserId(actorUserId)
+                    .orElseThrow(() -> new AccessDeniedException("Профиль работодателя не найден"));
+            VacancyEntity vacancy = application.getVacancy();
+            if (vacancy.getEmployer() == null || !employer.getId().equals(vacancy.getEmployer().getId())) {
+                throw new AccessDeniedException("Нельзя менять статус отклика на чужую вакансию");
+            }
+            return;
+        }
+        throw new AccessDeniedException("Смена статуса отклика недоступна для роли " + actorRole);
+    }
+
+    private void assertAllowedTarget(UserRole actorRole, ApplicationStatus targetStatus) {
+        if (actorRole == UserRole.CANDIDATE && targetStatus != ApplicationStatus.WITHDRAWN) {
+            throw new AccessDeniedException("Соискатель может только отозвать свой отклик");
+        }
+        if (actorRole == UserRole.EMPLOYER && !EMPLOYER_TARGETS.contains(targetStatus)) {
+            throw new AccessDeniedException("Работодатель не может установить статус " + targetStatus);
+        }
     }
 }

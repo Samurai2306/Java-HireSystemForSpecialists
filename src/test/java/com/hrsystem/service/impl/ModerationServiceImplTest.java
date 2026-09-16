@@ -93,8 +93,8 @@ class ModerationServiceImplTest {
         when(parsingLogRepository.findTopByOrderByStartedAtDesc()).thenReturn(Optional.empty());
 
         var stats = service.getDashboardStats();
-        assertEquals(12L, stats.getActiveVacancies());
-        assertEquals(2L, stats.getManualVacancies());
-        assertTrue(stats.getLastParsingStartedAt().contains("не запускался"));
+        assertEquals(12L, stats.activeVacancies());
+        assertEquals(2L, stats.manualVacancies());
+        assertTrue(stats.lastParsingStartedAt().contains("не запускался"));
     }
 }

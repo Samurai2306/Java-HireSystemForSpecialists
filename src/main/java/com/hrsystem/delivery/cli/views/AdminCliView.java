@@ -24,16 +24,14 @@ public class AdminCliView {
     private final ModerationService moderationService;
     private final ScraperCoordinatorService scraperCoordinatorService;
     private final ParsingLogRepository parsingLogRepository;
-    private final ConsoleTableFormatter tables;
+    private final ConsoleTableFormatter tables = new ConsoleTableFormatter();
 
     public AdminCliView(ModerationService moderationService,
                         ScraperCoordinatorService scraperCoordinatorService,
-                        ParsingLogRepository parsingLogRepository,
-                        ConsoleTableFormatter tables) {
+                        ParsingLogRepository parsingLogRepository) {
         this.moderationService = moderationService;
         this.scraperCoordinatorService = scraperCoordinatorService;
         this.parsingLogRepository = parsingLogRepository;
-        this.tables = tables;
     }
 
     public void show(InputValidator input, PrintStream out) {
@@ -47,11 +45,10 @@ public class AdminCliView {
             out.println("[5] Модерация каталога вакансий");
             out.println("[6] Блокировка учётных записей");
             out.println("[0] Выход в главное меню (Logout)");
-            int choice = input.readIntInRange("Выберите команду > ", 0, 6);
             try {
-                switch (choice) {
-                    case 1 -> runSites(input, out);
-                    case 2 -> runTelegram(input, out);
+                switch (input.readIntInRange("Выберите команду > ", 0, 6)) {
+                    case 1 -> runScraping(input, out, true);
+                    case 2 -> runScraping(input, out, false);
                     case 3 -> manageSources(input, out);
                     case 4 -> showLogs(out);
                     case 5 -> moderateVacancies(input, out);
@@ -71,31 +68,20 @@ public class AdminCliView {
         out.println();
         out.println("=== ПАНЕЛЬ УПРАВЛЕНИЯ ПАРСЕРАМИ И СБОРОМ ДАННЫХ ===");
         out.println("Статистика базы данных:");
-        out.println("- Всего активных вакансий: " + stats.getActiveVacancies());
-        out.println("- Спарсено через Web Scraper: " + stats.getWebsiteVacancies());
-        out.println("- Спарсено через Telegram Mirror: " + stats.getTelegramVacancies());
-        out.println("- Добавлено работодателями вручную: " + stats.getManualVacancies());
-        out.println("- Последний сбор: " + stats.getLastParsingStartedAt() + " (" + stats.getLastParsingStatus() + ")");
+        out.println("- Всего активных вакансий: " + stats.activeVacancies());
+        out.println("- Спарсено через Web Scraper: " + stats.websiteVacancies());
+        out.println("- Спарсено через Telegram Mirror: " + stats.telegramVacancies());
+        out.println("- Добавлено работодателями вручную: " + stats.manualVacancies());
+        out.println("- Последний сбор: " + stats.lastParsingStartedAt() + " (" + stats.lastParsingStatus() + ")");
         out.println("------------------------------------------------------------");
     }
 
-    private void runSites(InputValidator input, PrintStream out) {
+    private void runScraping(InputValidator input, PrintStream out, boolean website) {
         out.println();
-        out.println(">>> Запуск HTML Web Scraper...");
-        ParsingReportDto report = scraperCoordinatorService.runWebsiteScraping(out::println);
-        printReport(report, out);
-        input.readOptionalString("Enter для продолжения > ");
-    }
-
-    private void runTelegram(InputValidator input, PrintStream out) {
-        out.println();
-        out.println(">>> Запуск Telegram Web Mirror Extractor...");
-        ParsingReportDto report = scraperCoordinatorService.runTelegramScraping(out::println);
-        printReport(report, out);
-        input.readOptionalString("Enter для продолжения > ");
-    }
-
-    private void printReport(ParsingReportDto report, PrintStream out) {
+        out.println(website ? ">>> Запуск HTML Web Scraper..." : ">>> Запуск Telegram Web Mirror Extractor...");
+        ParsingReportDto report = website
+                ? scraperCoordinatorService.runWebsiteScraping(out::println)
+                : scraperCoordinatorService.runTelegramScraping(out::println);
         out.println();
         out.println("=== ОТЧЁТ ПАРСИНГА ===");
         out.println("Найдено:            " + report.getItemsFound());
@@ -105,6 +91,7 @@ public class AdminCliView {
         if (report.getSummary() != null) {
             out.println(report.getSummary());
         }
+        input.readOptionalString("Enter для продолжения > ");
     }
 
     private void manageSources(InputValidator input, PrintStream out) {
@@ -119,18 +106,15 @@ public class AdminCliView {
             if (action == 0) {
                 inSources = false;
             } else if (action == 1) {
-                String name = input.readRequiredString("Название > ");
-                int type = input.readIntInRange("Тип [1] WEBSITE [2] TELEGRAM > ", 1, 2);
-                String url = input.readUrl("URL > ");
                 ParsingSourceEntity created = moderationService.addSource(
-                        name,
-                        type == 2 ? VacancySource.TELEGRAM : VacancySource.WEBSITE,
-                        url
+                        input.readRequiredString("Название > "),
+                        input.readIntInRange("Тип [1] WEBSITE [2] TELEGRAM > ", 1, 2) == 2
+                                ? VacancySource.TELEGRAM : VacancySource.WEBSITE,
+                        input.readUrl("URL > ")
                 );
                 out.println("[OK] Источник #" + created.getId() + " добавлен");
             } else {
-                long id = input.readLong("ID источника > ");
-                ParsingSourceEntity updated = moderationService.toggleSource(id);
+                ParsingSourceEntity updated = moderationService.toggleSource(input.readLong("ID источника > "));
                 out.println("[OK] Источник #" + updated.getId() + " активен=" + updated.isActive());
             }
         }
@@ -158,13 +142,12 @@ public class AdminCliView {
         if (action == 0) {
             return;
         }
-        long id = input.readLong("ID вакансии > ");
         VacancyStatus status = switch (action) {
             case 2 -> VacancyStatus.REJECTED;
             case 3 -> VacancyStatus.ACTIVE;
             default -> VacancyStatus.ARCHIVED;
         };
-        VacancyEntity updated = moderationService.changeVacancyStatus(id, status);
+        VacancyEntity updated = moderationService.changeVacancyStatus(input.readLong("ID вакансии > "), status);
         out.println("[OK] Вакансия #" + updated.getId() + " → " + updated.getStatus());
     }
 
@@ -178,8 +161,7 @@ public class AdminCliView {
         if (action == 0) {
             return;
         }
-        long id = input.readLong("ID пользователя > ");
-        UserEntity updated = moderationService.setUserActive(id, action == 2);
+        UserEntity updated = moderationService.setUserActive(input.readLong("ID пользователя > "), action == 2);
         out.println("[OK] Пользователь " + updated.getEmail() + " активен=" + updated.isActive());
     }
 }

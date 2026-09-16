@@ -45,20 +45,22 @@ public class ModerationServiceImpl implements ModerationService {
     @Override
     @Transactional(readOnly = true)
     public DashboardStatsDto getDashboardStats() {
-        DashboardStatsDto stats = new DashboardStatsDto();
-        stats.setActiveVacancies(vacancyRepository.countByStatus(VacancyStatus.ACTIVE));
-        stats.setWebsiteVacancies(vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.WEBSITE));
-        stats.setTelegramVacancies(vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.TELEGRAM));
-        stats.setManualVacancies(vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.MANUAL));
-        parsingLogRepository.findTopByOrderByStartedAtDesc().ifPresent(log -> {
-            stats.setLastParsingStartedAt(log.getStartedAt() == null ? "—" : TS.format(log.getStartedAt()));
-            stats.setLastParsingStatus(log.getStatus());
-        });
-        if (stats.getLastParsingStatus() == null) {
-            stats.setLastParsingStartedAt("ещё не запускался");
-            stats.setLastParsingStatus("—");
+        String startedAt = "ещё не запускался";
+        String status = "—";
+        var lastLog = parsingLogRepository.findTopByOrderByStartedAtDesc();
+        if (lastLog.isPresent()) {
+            ParsingLogEntity log = lastLog.get();
+            startedAt = log.getStartedAt() == null ? "—" : TS.format(log.getStartedAt());
+            status = log.getStatus() == null ? "—" : log.getStatus();
         }
-        return stats;
+        return new DashboardStatsDto(
+                vacancyRepository.countByStatus(VacancyStatus.ACTIVE),
+                vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.WEBSITE),
+                vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.TELEGRAM),
+                vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.MANUAL),
+                startedAt,
+                status
+        );
     }
 
     @Override

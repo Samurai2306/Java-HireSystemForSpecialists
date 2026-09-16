@@ -26,14 +26,11 @@ public class EmployerCliView {
 
     private final EmployerService employerService;
     private final ApplicationService applicationService;
-    private final ConsoleTableFormatter tables;
+    private final ConsoleTableFormatter tables = new ConsoleTableFormatter();
 
-    public EmployerCliView(EmployerService employerService,
-                           ApplicationService applicationService,
-                           ConsoleTableFormatter tables) {
+    public EmployerCliView(EmployerService employerService, ApplicationService applicationService) {
         this.employerService = employerService;
         this.applicationService = applicationService;
-        this.tables = tables;
     }
 
     public void show(Long employerProfileId, Long userId, InputValidator input, PrintStream out) {
@@ -47,9 +44,8 @@ public class EmployerCliView {
             out.println("[4] Профиль компании");
             out.println("[0] Выход в главное меню (Logout)");
             out.println("------------------------------------------------------------");
-            int choice = input.readIntInRange("Выберите действие > ", 0, 4);
             try {
-                switch (choice) {
+                switch (input.readIntInRange("Выберите действие > ", 0, 4)) {
                     case 1 -> listVacancies(employerProfileId, userId, input, out);
                     case 2 -> createVacancy(employerProfileId, input, out);
                     case 3 -> funnel(employerProfileId, userId, input, out);
@@ -100,23 +96,23 @@ public class EmployerCliView {
     private void createVacancy(Long employerProfileId, InputValidator input, PrintStream out) {
         out.println();
         out.println("=== ПУБЛИКАЦИЯ ВАКАНСИИ ===");
-        CreateVacancyDto dto = new CreateVacancyDto();
-        dto.setTitle(input.readRequiredString("Должность > "));
-        dto.setSalaryMin(input.readOptionalInt("Зарплата ОТ > "));
-        dto.setSalaryMax(input.readOptionalInt("Зарплата ДО > "));
-        dto.setCurrency(readCurrency(input, out));
-        dto.setRequirementsStack(input.readOptionalString("Стек / требования > "));
-        dto.setDescription(input.readRequiredString("Описание > "));
-        dto.setEmploymentType(readEmployment(input));
-        dto.setLocation(input.readOptionalString("Локация > "));
+        CreateVacancyDto dto = new CreateVacancyDto(
+                input.readRequiredString("Должность > "),
+                input.readOptionalInt("Зарплата ОТ > "),
+                input.readOptionalInt("Зарплата ДО > "),
+                readCurrency(input, out),
+                input.readOptionalString("Стек / требования > "),
+                input.readRequiredString("Описание > "),
+                readEmployment(input),
+                input.readOptionalString("Локация > ")
+        );
         VacancyEntity created = employerService.createVacancy(employerProfileId, dto);
         out.println("[OK] Вакансия #" + created.getId() + " опубликована (is_parsed=false, статус ACTIVE, источник MANUAL)");
     }
 
     private Currency readCurrency(InputValidator input, PrintStream out) {
         out.println("Валюта: [1] RUB  [2] USD  [3] EUR  [4] KZT");
-        int c = input.readIntInRange("Валюта > ", 1, 4);
-        return switch (c) {
+        return switch (input.readIntInRange("Валюта > ", 1, 4)) {
             case 2 -> Currency.USD;
             case 3 -> Currency.EUR;
             case 4 -> Currency.KZT;
@@ -125,8 +121,7 @@ public class EmployerCliView {
     }
 
     private EmploymentType readEmployment(InputValidator input) {
-        int c = input.readIntInRange("Занятость [1] Remote [2] Office [3] Hybrid [4] Flexible > ", 1, 4);
-        return switch (c) {
+        return switch (input.readIntInRange("Занятость [1] Remote [2] Office [3] Hybrid [4] Flexible > ", 1, 4)) {
             case 2 -> EmploymentType.OFFICE;
             case 3 -> EmploymentType.HYBRID;
             case 4 -> EmploymentType.FLEXIBLE;
@@ -139,11 +134,9 @@ public class EmployerCliView {
         out.println();
         out.println("=== ВЫБОР ВАКАНСИИ ДЛЯ ВОРОНКИ ===");
         out.println(tables.formatEmployerVacancies(rows));
-        if (rows.isEmpty()) {
-            return;
+        if (!rows.isEmpty()) {
+            showFunnelForVacancy(employerProfileId, userId, input.readLong("ID вакансии > "), input, out);
         }
-        long vacancyId = input.readLong("ID вакансии > ");
-        showFunnelForVacancy(employerProfileId, userId, vacancyId, input, out);
     }
 
     private void showFunnelForVacancy(Long employerProfileId, Long userId, long vacancyId,
@@ -189,28 +182,28 @@ public class EmployerCliView {
         EmployerProfileEntity profile = employerService.getProfile(employerProfileId);
         out.println();
         out.println("=== ПРОФИЛЬ КОМПАНИИ ===");
-        out.println("Компания: " + profile.getCompanyName());
-        out.println("Контакт:  " + nullSafe(profile.getContactPerson()));
-        out.println("Сайт:     " + nullSafe(profile.getWebsiteUrl()));
-        out.println("Описание: " + nullSafe(profile.getDescription()));
+        out.println("Компания: " + dash(profile.getCompanyName()));
+        out.println("Контакт:  " + dash(profile.getContactPerson()));
+        out.println("Сайт:     " + dash(profile.getWebsiteUrl()));
+        out.println("Описание: " + dash(profile.getDescription()));
         if (!input.confirm("Изменить профиль?")) {
             return;
         }
-        String company = input.readOptionalString("Название компании (Enter — без изменений) > ");
-        String contact = input.readOptionalString("Контактное лицо (Enter — без изменений) > ");
-        String site = input.readOptionalString("Сайт (Enter — без изменений) > ");
-        String desc = input.readOptionalString("Описание (Enter — без изменений) > ");
         employerService.updateProfile(
                 employerProfileId,
-                company.isBlank() ? null : company,
-                contact.isBlank() ? null : contact,
-                site.isBlank() ? null : site,
-                desc.isBlank() ? null : desc
+                blankToNull(input.readOptionalString("Название компании (Enter — без изменений) > ")),
+                blankToNull(input.readOptionalString("Контактное лицо (Enter — без изменений) > ")),
+                blankToNull(input.readOptionalString("Сайт (Enter — без изменений) > ")),
+                blankToNull(input.readOptionalString("Описание (Enter — без изменений) > "))
         );
         out.println("[OK] Профиль обновлён");
     }
 
-    private String nullSafe(String value) {
+    private static String dash(String value) {
         return value == null || value.isBlank() ? "—" : value;
+    }
+
+    private static String blankToNull(String value) {
+        return value.isBlank() ? null : value;
     }
 }

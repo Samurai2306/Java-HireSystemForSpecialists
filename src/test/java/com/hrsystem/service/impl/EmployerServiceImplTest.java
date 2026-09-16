@@ -53,14 +53,16 @@ class EmployerServiceImplTest {
     @Test
     void createVacancySetsManualActiveAndNotParsed() {
         when(vacancyRepository.save(any(VacancyEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        CreateVacancyDto dto = new CreateVacancyDto();
-        dto.setTitle("Java Backend Developer");
-        dto.setSalaryMin(200_000);
-        dto.setSalaryMax(280_000);
-        dto.setCurrency(Currency.RUB);
-        dto.setDescription("Spring Boot, PostgreSQL");
-        dto.setRequirementsStack("Java, Spring");
-        dto.setEmploymentType(EmploymentType.REMOTE);
+        CreateVacancyDto dto = new CreateVacancyDto(
+                "Java Backend Developer",
+                200_000,
+                280_000,
+                Currency.RUB,
+                "Java, Spring",
+                "Spring Boot, PostgreSQL",
+                EmploymentType.REMOTE,
+                null
+        );
 
         VacancyEntity created = service.createVacancy(10L, dto);
 

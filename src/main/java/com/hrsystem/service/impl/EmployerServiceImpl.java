@@ -39,19 +39,19 @@ public class EmployerServiceImpl implements EmployerService {
     @Override
     public VacancyEntity createVacancy(Long employerProfileId, CreateVacancyDto dto) {
         EmployerProfileEntity employer = requireEmployer(employerProfileId);
-        validateSalary(dto.getSalaryMin(), dto.getSalaryMax());
+        validateSalary(dto.salaryMin(), dto.salaryMax());
 
         VacancyEntity vacancy = new VacancyEntity();
         vacancy.setEmployer(employer);
-        vacancy.setTitle(dto.getTitle().trim());
+        vacancy.setTitle(dto.title().trim());
         vacancy.setCompanyName(employer.getCompanyName());
-        vacancy.setSalaryMin(dto.getSalaryMin());
-        vacancy.setSalaryMax(dto.getSalaryMax());
-        vacancy.setCurrency(dto.getCurrency() == null ? Currency.RUB : dto.getCurrency());
-        vacancy.setDescription(dto.getDescription().trim());
-        vacancy.setRequirementsStack(blankToNull(dto.getRequirementsStack()));
-        vacancy.setEmploymentType(dto.getEmploymentType() == null ? EmploymentType.REMOTE : dto.getEmploymentType());
-        vacancy.setLocation(dto.getLocation() == null || dto.getLocation().isBlank() ? "Не указано" : dto.getLocation().trim());
+        vacancy.setSalaryMin(dto.salaryMin());
+        vacancy.setSalaryMax(dto.salaryMax());
+        vacancy.setCurrency(dto.currency() == null ? Currency.RUB : dto.currency());
+        vacancy.setDescription(dto.description().trim());
+        vacancy.setRequirementsStack(trimToNull(dto.requirementsStack()));
+        vacancy.setEmploymentType(dto.employmentType() == null ? EmploymentType.REMOTE : dto.employmentType());
+        vacancy.setLocation(dto.location() == null || dto.location().isBlank() ? "Не указано" : dto.location().trim());
         vacancy.setSourceType(VacancySource.MANUAL);
         vacancy.setParsed(false);
         vacancy.setStatus(VacancyStatus.ACTIVE);
@@ -79,7 +79,7 @@ public class EmployerServiceImpl implements EmployerService {
             vacancy.setSalaryMax(max);
         }
         if (requirements != null) {
-            vacancy.setRequirementsStack(requirements.isBlank() ? null : requirements.trim());
+            vacancy.setRequirementsStack(trimToNull(requirements));
         }
         return vacancyRepository.save(vacancy);
     }
@@ -116,13 +116,13 @@ public class EmployerServiceImpl implements EmployerService {
             profile.setCompanyName(companyName.trim());
         }
         if (contactPerson != null) {
-            profile.setContactPerson(contactPerson.isBlank() ? null : contactPerson.trim());
+            profile.setContactPerson(trimToNull(contactPerson));
         }
         if (websiteUrl != null) {
-            profile.setWebsiteUrl(websiteUrl.isBlank() ? null : websiteUrl.trim());
+            profile.setWebsiteUrl(trimToNull(websiteUrl));
         }
         if (description != null) {
-            profile.setDescription(description.isBlank() ? null : description.trim());
+            profile.setDescription(trimToNull(description));
         }
         return employerProfileRepository.save(profile);
     }
@@ -148,10 +148,7 @@ public class EmployerServiceImpl implements EmployerService {
         }
     }
 
-    private String blankToNull(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.trim();
+    private static String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }
