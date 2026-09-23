@@ -18,7 +18,9 @@ import com.hrsystem.service.EmployerService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -39,19 +41,31 @@ public class EmployerServiceImpl implements EmployerService {
     @Override
     public VacancyEntity createVacancy(Long employerProfileId, CreateVacancyDto dto) {
         EmployerProfileEntity employer = requireEmployer(employerProfileId);
-        validateSalary(dto.salaryMin(), dto.salaryMax());
+        validateSalary(dto.getSalaryMin(), dto.getSalaryMax());
 
         VacancyEntity vacancy = new VacancyEntity();
         vacancy.setEmployer(employer);
-        vacancy.setTitle(dto.title().trim());
+        vacancy.setTitle(dto.getTitle().trim());
         vacancy.setCompanyName(employer.getCompanyName());
-        vacancy.setSalaryMin(dto.salaryMin());
-        vacancy.setSalaryMax(dto.salaryMax());
-        vacancy.setCurrency(dto.currency() == null ? Currency.RUB : dto.currency());
-        vacancy.setDescription(dto.description().trim());
-        vacancy.setRequirementsStack(trimToNull(dto.requirementsStack()));
-        vacancy.setEmploymentType(dto.employmentType() == null ? EmploymentType.REMOTE : dto.employmentType());
-        vacancy.setLocation(dto.location() == null || dto.location().isBlank() ? "Не указано" : dto.location().trim());
+        vacancy.setSalaryMin(dto.getSalaryMin());
+        vacancy.setSalaryMax(dto.getSalaryMax());
+        if (dto.getCurrency() == null) {
+            vacancy.setCurrency(Currency.RUB);
+        } else {
+            vacancy.setCurrency(dto.getCurrency());
+        }
+        vacancy.setDescription(dto.getDescription().trim());
+        vacancy.setRequirementsStack(trimToNull(dto.getRequirementsStack()));
+        if (dto.getEmploymentType() == null) {
+            vacancy.setEmploymentType(EmploymentType.REMOTE);
+        } else {
+            vacancy.setEmploymentType(dto.getEmploymentType());
+        }
+        if (dto.getLocation() == null || dto.getLocation().isBlank()) {
+            vacancy.setLocation("Не указано");
+        } else {
+            vacancy.setLocation(dto.getLocation().trim());
+        }
         vacancy.setSourceType(VacancySource.MANUAL);
         vacancy.setParsed(false);
         vacancy.setStatus(VacancyStatus.ACTIVE);
@@ -62,9 +76,13 @@ public class EmployerServiceImpl implements EmployerService {
     @Transactional(readOnly = true)
     public List<EmployerVacancyRowDto> listMyVacancies(Long employerProfileId) {
         requireEmployer(employerProfileId);
-        return vacancyRepository.findByEmployerIdOrderByPublishedAtDesc(employerProfileId).stream()
-                .map(v -> EmployerVacancyRowDto.from(v, applicationRepository.countByVacancyId(v.getId())))
-                .toList();
+        List<VacancyEntity> vacancies = vacancyRepository.findByEmployerIdOrderByPublishedAtDesc(employerProfileId);
+        List<EmployerVacancyRowDto> rows = new ArrayList<>();
+        for (VacancyEntity vacancy : vacancies) {
+            long count = applicationRepository.countByVacancyId(vacancy.getId());
+            rows.add(EmployerVacancyRowDto.from(vacancy, count));
+        }
+        return rows;
     }
 
     @Override
@@ -72,8 +90,14 @@ public class EmployerServiceImpl implements EmployerService {
                                        Integer salaryMax, String requirements) {
         VacancyEntity vacancy = getOwnedVacancy(employerProfileId, vacancyId);
         if (salaryMin != null || salaryMax != null) {
-            Integer min = salaryMin != null ? salaryMin : vacancy.getSalaryMin();
-            Integer max = salaryMax != null ? salaryMax : vacancy.getSalaryMax();
+            Integer min = salaryMin;
+            if (min == null) {
+                min = vacancy.getSalaryMin();
+            }
+            Integer max = salaryMax;
+            if (max == null) {
+                max = vacancy.getSalaryMax();
+            }
             validateSalary(min, max);
             vacancy.setSalaryMin(min);
             vacancy.setSalaryMax(max);
@@ -94,8 +118,11 @@ public class EmployerServiceImpl implements EmployerService {
     @Override
     @Transactional(readOnly = true)
     public VacancyEntity getOwnedVacancy(Long employerProfileId, Long vacancyId) {
-        VacancyEntity vacancy = vacancyRepository.findWithEmployerById(vacancyId)
-                .orElseThrow(() -> new EntityNotFoundException("Вакансия #" + vacancyId + " не найдена"));
+        Optional<VacancyEntity> found = vacancyRepository.findWithEmployerById(vacancyId);
+        if (found.isEmpty()) {
+            throw new EntityNotFoundException("Вакансия #" + vacancyId + " не найдена");
+        }
+        VacancyEntity vacancy = found.get();
         if (vacancy.getEmployer() == null || !employerProfileId.equals(vacancy.getEmployer().getId())) {
             throw new AccessDeniedException("Нельзя управлять чужой вакансией #" + vacancyId);
         }
@@ -135,8 +162,11 @@ public class EmployerServiceImpl implements EmployerService {
     }
 
     private EmployerProfileEntity requireEmployer(Long employerProfileId) {
-        return employerProfileRepository.findById(employerProfileId)
-                .orElseThrow(() -> new EntityNotFoundException("Профиль работодателя #" + employerProfileId + " не найден"));
+        Optional<EmployerProfileEntity> found = employerProfileRepository.findById(employerProfileId);
+        if (found.isEmpty()) {
+            throw new EntityNotFoundException("Профиль работодателя #" + employerProfileId + " не найден");
+        }
+        return found.get();
     }
 
     private void validateSalary(Integer min, Integer max) {
@@ -149,6 +179,9 @@ public class EmployerServiceImpl implements EmployerService {
     }
 
     private static String trimToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }

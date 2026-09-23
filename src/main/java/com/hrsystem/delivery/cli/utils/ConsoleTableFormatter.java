@@ -101,13 +101,27 @@ public class ConsoleTableFormatter {
     public String formatEmployerVacancies(List<EmployerVacancyRowDto> items) {
         ConsoleTableFormatter table = new ConsoleTableFormatter("ID", "Должность", "Дата", "Статус", "Откликов");
         for (EmployerVacancyRowDto row : items) {
-            String published = row.publishedAt() == null ? "" : row.publishedAt();
+            String published = "";
+            if (row.getPublishedAt() != null) {
+                published = row.getPublishedAt();
+            }
+            if (published.length() >= 10) {
+                published = published.substring(0, 10);
+            }
+            String statusLabel = "";
+            if (row.getStatus() == VacancyStatus.ARCHIVED) {
+                statusLabel = "В архиве";
+            } else if (row.getStatus() == VacancyStatus.ACTIVE) {
+                statusLabel = "Активна";
+            } else if (row.getStatus() != null) {
+                statusLabel = row.getStatus().name();
+            }
             table.addRow(
-                    String.valueOf(row.id()),
-                    text(row.title()),
-                    published.length() >= 10 ? published.substring(0, 10) : published,
-                    row.status() == VacancyStatus.ARCHIVED ? "В архиве" : row.status() == VacancyStatus.ACTIVE ? "Активна" : text(row.status() == null ? null : row.status().name()),
-                    String.valueOf(row.applicationCount())
+                    String.valueOf(row.getId()),
+                    text(row.getTitle()),
+                    published,
+                    statusLabel,
+                    String.valueOf(row.getApplicationCount())
             );
         }
         return table.render();
@@ -200,13 +214,19 @@ public class ConsoleTableFormatter {
         if (status == null) {
             return "";
         }
-        return switch (status) {
-            case OFFER -> AnsiColor.GREEN + status.name() + AnsiColor.RESET;
-            case REVIEWING -> AnsiColor.YELLOW + status.name() + AnsiColor.RESET;
-            case REJECTED -> AnsiColor.RED + status.name() + AnsiColor.RESET;
-            case APPLIED -> AnsiColor.BLUE + status.name() + AnsiColor.RESET;
-            case WITHDRAWN -> AnsiColor.GRAY + status.name() + AnsiColor.RESET;
-        };
+        if (status == ApplicationStatus.OFFER) {
+            return AnsiColor.GREEN + status.name() + AnsiColor.RESET;
+        }
+        if (status == ApplicationStatus.REVIEWING) {
+            return AnsiColor.YELLOW + status.name() + AnsiColor.RESET;
+        }
+        if (status == ApplicationStatus.REJECTED) {
+            return AnsiColor.RED + status.name() + AnsiColor.RESET;
+        }
+        if (status == ApplicationStatus.APPLIED) {
+            return AnsiColor.BLUE + status.name() + AnsiColor.RESET;
+        }
+        return AnsiColor.GRAY + status.name() + AnsiColor.RESET;
     }
 
     private static String row(List<String> cells, int[] widths) {

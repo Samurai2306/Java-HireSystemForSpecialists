@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -45,22 +46,30 @@ public class ModerationServiceImpl implements ModerationService {
     @Override
     @Transactional(readOnly = true)
     public DashboardStatsDto getDashboardStats() {
-        String startedAt = "ещё не запускался";
-        String status = "—";
-        var lastLog = parsingLogRepository.findTopByOrderByStartedAtDesc();
-        if (lastLog.isPresent()) {
-            ParsingLogEntity log = lastLog.get();
-            startedAt = log.getStartedAt() == null ? "—" : TS.format(log.getStartedAt());
-            status = log.getStatus() == null ? "—" : log.getStatus();
+        DashboardStatsDto stats = new DashboardStatsDto();
+        stats.setActiveVacancies(vacancyRepository.countByStatus(VacancyStatus.ACTIVE));
+        stats.setWebsiteVacancies(vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.WEBSITE));
+        stats.setTelegramVacancies(vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.TELEGRAM));
+        stats.setManualVacancies(vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.MANUAL));
+
+        Optional<ParsingLogEntity> lastLog = parsingLogRepository.findTopByOrderByStartedAtDesc();
+        if (lastLog.isEmpty()) {
+            stats.setLastParsingStartedAt("ещё не запускался");
+            stats.setLastParsingStatus("—");
+            return stats;
         }
-        return new DashboardStatsDto(
-                vacancyRepository.countByStatus(VacancyStatus.ACTIVE),
-                vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.WEBSITE),
-                vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.TELEGRAM),
-                vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.MANUAL),
-                startedAt,
-                status
-        );
+        ParsingLogEntity log = lastLog.get();
+        if (log.getStartedAt() == null) {
+            stats.setLastParsingStartedAt("—");
+        } else {
+            stats.setLastParsingStartedAt(TS.format(log.getStartedAt()));
+        }
+        if (log.getStatus() == null) {
+            stats.setLastParsingStatus("—");
+        } else {
+            stats.setLastParsingStatus(log.getStatus());
+        }
+        return stats;
     }
 
     @Override
@@ -71,8 +80,11 @@ public class ModerationServiceImpl implements ModerationService {
 
     @Override
     public VacancyEntity changeVacancyStatus(Long vacancyId, VacancyStatus status) {
-        VacancyEntity vacancy = vacancyRepository.findById(vacancyId)
-                .orElseThrow(() -> new EntityNotFoundException("Вакансия #" + vacancyId + " не найдена"));
+        Optional<VacancyEntity> found = vacancyRepository.findById(vacancyId);
+        if (found.isEmpty()) {
+            throw new EntityNotFoundException("Вакансия #" + vacancyId + " не найдена");
+        }
+        VacancyEntity vacancy = found.get();
         vacancy.setStatus(status);
         return vacancyRepository.save(vacancy);
     }
@@ -85,8 +97,11 @@ public class ModerationServiceImpl implements ModerationService {
 
     @Override
     public UserEntity setUserActive(Long userId, boolean active) {
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("Пользователь #" + userId + " не найден"));
+        Optional<UserEntity> found = userRepository.findById(userId);
+        if (found.isEmpty()) {
+            throw new EntityNotFoundException("Пользователь #" + userId + " не найден");
+        }
+        UserEntity user = found.get();
         if (user.getRole() == UserRole.ADMIN) {
             throw new IllegalArgumentException("Нельзя блокировать учётную запись администратора");
         }
@@ -118,8 +133,11 @@ public class ModerationServiceImpl implements ModerationService {
 
     @Override
     public ParsingSourceEntity toggleSource(Long sourceId) {
-        ParsingSourceEntity source = parsingSourceRepository.findById(sourceId)
-                .orElseThrow(() -> new EntityNotFoundException("Источник #" + sourceId + " не найден"));
+        Optional<ParsingSourceEntity> found = parsingSourceRepository.findById(sourceId);
+        if (found.isEmpty()) {
+            throw new EntityNotFoundException("Источник #" + sourceId + " не найден");
+        }
+        ParsingSourceEntity source = found.get();
         source.setActive(!source.isActive());
         return parsingSourceRepository.save(source);
     }

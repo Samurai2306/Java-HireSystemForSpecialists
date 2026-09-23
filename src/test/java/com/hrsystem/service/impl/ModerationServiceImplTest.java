@@ -6,6 +6,7 @@ import com.hrsystem.domain.entity.VacancyEntity;
 import com.hrsystem.domain.enums.UserRole;
 import com.hrsystem.domain.enums.VacancySource;
 import com.hrsystem.domain.enums.VacancyStatus;
+import com.hrsystem.dto.response.DashboardStatsDto;
 import com.hrsystem.repository.ParsingLogRepository;
 import com.hrsystem.repository.ParsingSourceRepository;
 import com.hrsystem.repository.UserRepository;
@@ -92,9 +93,9 @@ class ModerationServiceImplTest {
         when(vacancyRepository.countByStatusAndSourceType(VacancyStatus.ACTIVE, VacancySource.MANUAL)).thenReturn(2L);
         when(parsingLogRepository.findTopByOrderByStartedAtDesc()).thenReturn(Optional.empty());
 
-        var stats = service.getDashboardStats();
-        assertEquals(12L, stats.activeVacancies());
-        assertEquals(2L, stats.manualVacancies());
-        assertTrue(stats.lastParsingStartedAt().contains("не запускался"));
+        DashboardStatsDto stats = service.getDashboardStats();
+        assertEquals(12L, stats.getActiveVacancies());
+        assertEquals(2L, stats.getManualVacancies());
+        assertTrue(stats.getLastParsingStartedAt().contains("не запускался"));
     }
 }

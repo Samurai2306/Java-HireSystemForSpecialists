@@ -3,20 +3,45 @@ package com.hrsystem.dto.response;
 import com.hrsystem.domain.entity.VacancyEntity;
 import com.hrsystem.domain.enums.VacancyStatus;
 
-public record EmployerVacancyRowDto(
-        Long id,
-        String title,
-        String publishedAt,
-        VacancyStatus status,
-        long applicationCount
-) {
+public class EmployerVacancyRowDto {
+
+    private Long id;
+    private String title;
+    private String publishedAt;
+    private VacancyStatus status;
+    private long applicationCount;
+
     public static EmployerVacancyRowDto from(VacancyEntity vacancy, long applicationCount) {
-        return new EmployerVacancyRowDto(
-                vacancy.getId(),
-                vacancy.getTitle(),
-                vacancy.getPublishedAt() == null ? "" : vacancy.getPublishedAt().toString(),
-                vacancy.getStatus(),
-                applicationCount
-        );
+        EmployerVacancyRowDto dto = new EmployerVacancyRowDto();
+        dto.id = vacancy.getId();
+        dto.title = vacancy.getTitle();
+        if (vacancy.getPublishedAt() != null) {
+            dto.publishedAt = vacancy.getPublishedAt().toString();
+        } else {
+            dto.publishedAt = "";
+        }
+        dto.status = vacancy.getStatus();
+        dto.applicationCount = applicationCount;
+        return dto;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public String getPublishedAt() {
+        return publishedAt;
+    }
+
+    public VacancyStatus getStatus() {
+        return status;
+    }
+
+    public long getApplicationCount() {
+        return applicationCount;
     }
 }

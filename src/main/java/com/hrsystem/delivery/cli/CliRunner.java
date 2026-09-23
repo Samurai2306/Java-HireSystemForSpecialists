@@ -6,6 +6,7 @@ import com.hrsystem.delivery.cli.views.AdminCliView;
 import com.hrsystem.delivery.cli.views.AuthCliView;
 import com.hrsystem.delivery.cli.views.CandidateCliView;
 import com.hrsystem.delivery.cli.views.EmployerCliView;
+import com.hrsystem.domain.entity.EmployerProfileEntity;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -43,16 +44,20 @@ public class CliRunner implements CommandLineRunner {
                 AnsiColor.BOLD + AnsiColor.CYAN));
 
         while (true) {
-            if (!sessionContext.isAuthorized() && !authCliView.showMainMenu()) {
-                return;
+            if (!sessionContext.isAuthorized()) {
+                boolean stayInProgram = authCliView.showMainMenu();
+                if (!stayInProgram) {
+                    return;
+                }
             }
+
             if (sessionContext.isCandidate()) {
                 candidateCliView.showCandidateDashboard();
             } else if (sessionContext.isGuest()) {
                 candidateCliView.showVacancyCatalog();
                 sessionContext.logout();
             } else if (sessionContext.isEmployer()) {
-                var profile = sessionContext.getCurrentEmployerProfile();
+                EmployerProfileEntity profile = sessionContext.getCurrentEmployerProfile();
                 if (profile != null) {
                     employerCliView.show(profile.getId(), sessionContext.getCurrentUserId(), inputValidator, System.out);
                 } else {
@@ -67,8 +72,8 @@ public class CliRunner implements CommandLineRunner {
     }
 
     private static boolean cliDisabled(String... args) {
-        for (String arg : args) {
-            if ("--no-cli".equalsIgnoreCase(arg)) {
+        for (int i = 0; i < args.length; i++) {
+            if ("--no-cli".equalsIgnoreCase(args[i])) {
                 return true;
             }
         }

@@ -22,7 +22,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.EnumSet;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -133,7 +132,7 @@ class ApplicationServiceImplTest {
         when(candidateProfileRepository.findById(5L)).thenReturn(Optional.of(candidate));
         when(vacancyRepository.findById(100L)).thenReturn(Optional.of(vacancy));
         when(applicationRepository.existsByVacancyIdAndCandidateIdAndStatusIn(
-                eq(100L), eq(5L), eq(EnumSet.of(ApplicationStatus.APPLIED, ApplicationStatus.REVIEWING))))
+                eq(100L), eq(5L), any()))
                 .thenReturn(true);
 
         assertThrows(DuplicateApplicationException.class, () -> service.apply(5L, 100L, "hi"));

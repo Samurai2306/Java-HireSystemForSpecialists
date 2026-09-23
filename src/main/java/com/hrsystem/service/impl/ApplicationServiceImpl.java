@@ -19,17 +19,13 @@ import com.hrsystem.service.ApplicationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.EnumSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 @Service
 @Transactional
 public class ApplicationServiceImpl implements ApplicationService {
-
-    private static final Set<ApplicationStatus> ACTIVE_STATUSES =
-            EnumSet.of(ApplicationStatus.APPLIED, ApplicationStatus.REVIEWING);
-    private static final Set<ApplicationStatus> EMPLOYER_TARGETS =
-            EnumSet.of(ApplicationStatus.REVIEWING, ApplicationStatus.OFFER, ApplicationStatus.REJECTED);
 
     private final ApplicationRepository applicationRepository;
     private final VacancyRepository vacancyRepository;
@@ -52,12 +48,15 @@ public class ApplicationServiceImpl implements ApplicationService {
     @Override
     public ApplicationEntity changeStatus(Long applicationId, ApplicationStatus targetStatus, String comment,
                                           Long actorUserId, UserRole actorRole) {
-        ApplicationEntity application = applicationRepository.findWithDetailsById(applicationId)
-                .orElseThrow(() -> new EntityNotFoundException("Отклик #" + applicationId + " не найден"));
+        Optional<ApplicationEntity> found = applicationRepository.findWithDetailsById(applicationId);
+        if (found.isEmpty()) {
+            throw new EntityNotFoundException("Отклик #" + applicationId + " не найден");
+        }
+        ApplicationEntity application = found.get();
 
-        assertOwns(application, actorUserId, actorRole);
+        checkOwner(application, actorUserId, actorRole);
         stateMachine.validate(application.getStatus(), targetStatus);
-        assertAllowedTarget(actorRole, targetStatus);
+        checkRoleCanSetStatus(actorRole, targetStatus);
 
         application.setStatus(targetStatus);
         if (comment != null && !comment.isBlank()) {
@@ -68,48 +67,69 @@ public class ApplicationServiceImpl implements ApplicationService {
 
     @Override
     public ApplicationEntity apply(Long candidateProfileId, Long vacancyId, String coverLetter) {
-        CandidateProfileEntity candidate = candidateProfileRepository.findById(candidateProfileId)
-                .orElseThrow(() -> new EntityNotFoundException("Профиль соискателя не найден"));
-        VacancyEntity vacancy = vacancyRepository.findById(vacancyId)
-                .orElseThrow(() -> new EntityNotFoundException("Вакансия #" + vacancyId + " не найдена"));
+        Optional<CandidateProfileEntity> candidateFound = candidateProfileRepository.findById(candidateProfileId);
+        if (candidateFound.isEmpty()) {
+            throw new EntityNotFoundException("Профиль соискателя не найден");
+        }
+        Optional<VacancyEntity> vacancyFound = vacancyRepository.findById(vacancyId);
+        if (vacancyFound.isEmpty()) {
+            throw new EntityNotFoundException("Вакансия #" + vacancyId + " не найдена");
+        }
+        CandidateProfileEntity candidate = candidateFound.get();
+        VacancyEntity vacancy = vacancyFound.get();
         if (vacancy.getStatus() != VacancyStatus.ACTIVE) {
             throw new IllegalArgumentException("Отклик возможен только на активную вакансию");
         }
+
+        List<ApplicationStatus> activeStatuses = new ArrayList<>();
+        activeStatuses.add(ApplicationStatus.APPLIED);
+        activeStatuses.add(ApplicationStatus.REVIEWING);
         if (applicationRepository.existsByVacancyIdAndCandidateIdAndStatusIn(
-                vacancyId, candidateProfileId, ACTIVE_STATUSES)) {
+                vacancyId, candidateProfileId, activeStatuses)) {
             throw new DuplicateApplicationException(
                     "Уже есть активный отклик на вакансию #" + vacancyId + " (APPLIED или REVIEWING)");
         }
+
         ApplicationEntity application = new ApplicationEntity();
         application.setCandidate(candidate);
         application.setVacancy(vacancy);
-        application.setCoverLetter(coverLetter == null || coverLetter.isBlank() ? candidate.getSkills() : coverLetter.trim());
+        if (coverLetter == null || coverLetter.isBlank()) {
+            application.setCoverLetter(candidate.getSkills());
+        } else {
+            application.setCoverLetter(coverLetter.trim());
+        }
         application.setStatus(ApplicationStatus.APPLIED);
         return applicationRepository.save(application);
     }
 
     @Override
     public ApplicationEntity withdraw(Long candidateProfileId, Long applicationId) {
-        CandidateProfileEntity candidate = candidateProfileRepository.findById(candidateProfileId)
-                .orElseThrow(() -> new EntityNotFoundException("Профиль соискателя не найден"));
+        Optional<CandidateProfileEntity> found = candidateProfileRepository.findById(candidateProfileId);
+        if (found.isEmpty()) {
+            throw new EntityNotFoundException("Профиль соискателя не найден");
+        }
         return changeStatus(applicationId, ApplicationStatus.WITHDRAWN, "Отзыв соискателем",
-                candidate.getUser().getId(), UserRole.CANDIDATE);
+                found.get().getUser().getId(), UserRole.CANDIDATE);
     }
 
-    private void assertOwns(ApplicationEntity application, Long actorUserId, UserRole actorRole) {
+    private void checkOwner(ApplicationEntity application, Long actorUserId, UserRole actorRole) {
         if (actorRole == UserRole.CANDIDATE) {
-            CandidateProfileEntity profile = candidateProfileRepository.findByUserId(actorUserId)
-                    .orElseThrow(() -> new AccessDeniedException("Профиль соискателя не найден"));
-            if (!profile.getId().equals(application.getCandidate().getId())) {
+            Optional<CandidateProfileEntity> found = candidateProfileRepository.findByUserId(actorUserId);
+            if (found.isEmpty()) {
+                throw new AccessDeniedException("Профиль соискателя не найден");
+            }
+            if (!found.get().getId().equals(application.getCandidate().getId())) {
                 throw new AccessDeniedException("Нельзя изменять чужой отклик");
             }
             return;
         }
         if (actorRole == UserRole.EMPLOYER) {
-            EmployerProfileEntity employer = employerProfileRepository.findByUserId(actorUserId)
-                    .orElseThrow(() -> new AccessDeniedException("Профиль работодателя не найден"));
+            Optional<EmployerProfileEntity> found = employerProfileRepository.findByUserId(actorUserId);
+            if (found.isEmpty()) {
+                throw new AccessDeniedException("Профиль работодателя не найден");
+            }
             VacancyEntity vacancy = application.getVacancy();
-            if (vacancy.getEmployer() == null || !employer.getId().equals(vacancy.getEmployer().getId())) {
+            if (vacancy.getEmployer() == null || !found.get().getId().equals(vacancy.getEmployer().getId())) {
                 throw new AccessDeniedException("Нельзя менять статус отклика на чужую вакансию");
             }
             return;
@@ -117,12 +137,17 @@ public class ApplicationServiceImpl implements ApplicationService {
         throw new AccessDeniedException("Смена статуса отклика недоступна для роли " + actorRole);
     }
 
-    private void assertAllowedTarget(UserRole actorRole, ApplicationStatus targetStatus) {
+    private void checkRoleCanSetStatus(UserRole actorRole, ApplicationStatus targetStatus) {
         if (actorRole == UserRole.CANDIDATE && targetStatus != ApplicationStatus.WITHDRAWN) {
             throw new AccessDeniedException("Соискатель может только отозвать свой отклик");
         }
-        if (actorRole == UserRole.EMPLOYER && !EMPLOYER_TARGETS.contains(targetStatus)) {
-            throw new AccessDeniedException("Работодатель не может установить статус " + targetStatus);
+        if (actorRole == UserRole.EMPLOYER) {
+            boolean allowed = targetStatus == ApplicationStatus.REVIEWING
+                    || targetStatus == ApplicationStatus.OFFER
+                    || targetStatus == ApplicationStatus.REJECTED;
+            if (!allowed) {
+                throw new AccessDeniedException("Работодатель не может установить статус " + targetStatus);
+            }
         }
     }
 }
