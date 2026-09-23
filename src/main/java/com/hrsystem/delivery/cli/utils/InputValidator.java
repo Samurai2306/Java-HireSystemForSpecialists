@@ -1,19 +1,31 @@
 package com.hrsystem.delivery.cli.utils;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.Locale;
 import java.util.Scanner;
 import java.util.regex.Pattern;
 
+/**
+ * Единая точка чтения пользовательского ввода. Один общий экземпляр-бин на всё приложение:
+ * несколько Scanner поверх System.in конфликтуют и «съедают» строки друг друга.
+ */
+@Component
 public class InputValidator {
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
     private static final Pattern URL_PATTERN = Pattern.compile("^(https?://).+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DOMAIN_PATTERN = Pattern.compile("[A-Za-z0-9.-]+\\.[A-Za-z]{2,}([/?#]\\S*)?");
+    private static final Pattern PHONE_PATTERN = Pattern.compile("\\+?\\d[\\d\\s\\-()]*");
+    private static final Pattern TELEGRAM_PATTERN = Pattern.compile("@[A-Za-z0-9_]{3,32}");
 
     private final Scanner scanner;
     private final PrintStream out;
 
+    @Autowired
     public InputValidator() {
         this(System.in, System.out);
     }
@@ -128,7 +140,77 @@ public class InputValidator {
             if (isUrl(value)) {
                 return value;
             }
-            error("URL должен начинаться с http:// или https://");
+            if (DOMAIN_PATTERN.matcher(value).matches()) {
+                return "https://" + value;
+            }
+            error("Укажите ссылку вида https://site.com (можно и просто site.com).");
+        }
+    }
+
+    /** Телефон: цифры, пробелы, скобки, дефис; от 10 до 15 цифр (например +7 (999) 123-45-67). */
+    public String readPhone(String prompt) {
+        while (true) {
+            String value = readNonEmptyString(prompt).trim();
+            if (isPhone(value)) {
+                return value;
+            }
+            error("Неверный номер телефона. Пример: +7 (999) 123-45-67 (только цифры, 10-15 цифр).");
+        }
+    }
+
+    /** Telegram-ник: @ + латиница/цифры/подчёркивание, например @username. */
+    public String readTelegram(String prompt) {
+        while (true) {
+            String value = readNonEmptyString(prompt).trim();
+            if (isTelegram(value)) {
+                return value;
+            }
+            error("Telegram должен начинаться с @ и содержать только латиницу, цифры и _ (пример: @username).");
+        }
+    }
+
+    public String readOptionalPhone(String prompt, String current) {
+        while (true) {
+            String line = readRaw(prompt);
+            if (line == null || line.trim().isEmpty()) {
+                return current;
+            }
+            String value = line.trim();
+            if (isPhone(value)) {
+                return value;
+            }
+            error("Неверный номер телефона. Пример: +7 (999) 123-45-67 (Enter — оставить текущий).");
+        }
+    }
+
+    public String readOptionalTelegram(String prompt, String current) {
+        while (true) {
+            String line = readRaw(prompt);
+            if (line == null || line.trim().isEmpty()) {
+                return current;
+            }
+            String value = line.trim();
+            if (isTelegram(value)) {
+                return value;
+            }
+            error("Telegram должен начинаться с @ (пример: @username). Enter — оставить текущий.");
+        }
+    }
+
+    public String readOptionalUrl(String prompt, String current) {
+        while (true) {
+            String line = readRaw(prompt);
+            if (line == null || line.trim().isEmpty()) {
+                return current;
+            }
+            String value = line.trim();
+            if (isUrl(value)) {
+                return value;
+            }
+            if (DOMAIN_PATTERN.matcher(value).matches()) {
+                return "https://" + value;
+            }
+            error("Укажите ссылку вида https://site.com. Enter — оставить текущую.");
         }
     }
 
@@ -170,6 +252,18 @@ public class InputValidator {
 
     public boolean isUrl(String value) {
         return value != null && URL_PATTERN.matcher(value.trim()).matches();
+    }
+
+    public boolean isPhone(String value) {
+        if (value == null || !PHONE_PATTERN.matcher(value.trim()).matches()) {
+            return false;
+        }
+        long digits = value.chars().filter(Character::isDigit).count();
+        return digits >= 10 && digits <= 15;
+    }
+
+    public boolean isTelegram(String value) {
+        return value != null && TELEGRAM_PATTERN.matcher(value.trim()).matches();
     }
 
     private String readRaw(String prompt) {

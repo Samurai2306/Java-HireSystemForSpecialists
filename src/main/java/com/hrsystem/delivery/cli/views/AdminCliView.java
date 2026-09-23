@@ -1,11 +1,13 @@
 package com.hrsystem.delivery.cli.views;
 
+import com.hrsystem.delivery.cli.CliSessionContext;
 import com.hrsystem.delivery.cli.utils.ConsoleTableFormatter;
 import com.hrsystem.delivery.cli.utils.InputValidator;
 import com.hrsystem.domain.entity.ParsingLogEntity;
 import com.hrsystem.domain.entity.ParsingSourceEntity;
 import com.hrsystem.domain.entity.UserEntity;
 import com.hrsystem.domain.entity.VacancyEntity;
+import com.hrsystem.domain.enums.UserRole;
 import com.hrsystem.domain.enums.VacancySource;
 import com.hrsystem.domain.enums.VacancyStatus;
 import com.hrsystem.dto.response.DashboardStatsDto;
@@ -13,31 +15,51 @@ import com.hrsystem.dto.response.ParsingReportDto;
 import com.hrsystem.repository.ParsingLogRepository;
 import com.hrsystem.scraper.ScraperCoordinatorService;
 import com.hrsystem.service.ModerationService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.PrintStream;
 import java.util.List;
 
+/** Кабинет администратора: парсинг, модерация вакансий, блокировка пользователей. */
 @Component
-public class AdminCliView {
+public class AdminCliView extends AbstractCliView implements RoleMenu {
 
     private final ModerationService moderationService;
     private final ScraperCoordinatorService scraperCoordinatorService;
     private final ParsingLogRepository parsingLogRepository;
     private final ConsoleTableFormatter tables = new ConsoleTableFormatter();
 
+    @Autowired
     public AdminCliView(ModerationService moderationService,
                         ScraperCoordinatorService scraperCoordinatorService,
-                        ParsingLogRepository parsingLogRepository) {
+                        ParsingLogRepository parsingLogRepository,
+                        CliSessionContext sessionContext,
+                        InputValidator input) {
+        this(moderationService, scraperCoordinatorService, parsingLogRepository, sessionContext, input, System.out);
+    }
+
+    public AdminCliView(ModerationService moderationService,
+                        ScraperCoordinatorService scraperCoordinatorService,
+                        ParsingLogRepository parsingLogRepository,
+                        CliSessionContext sessionContext,
+                        InputValidator input,
+                        PrintStream out) {
+        super(sessionContext, input, out);
         this.moderationService = moderationService;
         this.scraperCoordinatorService = scraperCoordinatorService;
         this.parsingLogRepository = parsingLogRepository;
     }
 
-    public void show(InputValidator input, PrintStream out) {
-        boolean inMenu = true;
-        while (inMenu) {
-            printDashboard(out);
+    @Override
+    public boolean supports(UserRole role) {
+        return role == UserRole.ADMIN;
+    }
+
+    @Override
+    public void open() {
+        while (true) {
+            safely(this::printDashboard);
             out.println("[1] Запустить принудительный парсинг HTML-сайтов");
             out.println("[2] Запустить парсинг Telegram-каналов");
             out.println("[3] Управление списком источников (Добавить / вкл-выкл)");
@@ -45,45 +67,42 @@ public class AdminCliView {
             out.println("[5] Модерация каталога вакансий");
             out.println("[6] Блокировка учётных записей");
             out.println("[0] Выход в главное меню (Logout)");
-            try {
-                switch (input.readIntInRange("Выберите команду > ", 0, 6)) {
-                    case 1 -> runScraping(input, out, true);
-                    case 2 -> runScraping(input, out, false);
-                    case 3 -> manageSources(input, out);
-                    case 4 -> showLogs(out);
-                    case 5 -> moderateVacancies(input, out);
-                    case 6 -> moderateUsers(input, out);
-                    case 0 -> inMenu = false;
-                    default -> {
-                    }
+            switch (in.readIntInRange("Выберите команду > ", 0, 6)) {
+                case 1 -> safely(() -> runScraping(true));
+                case 2 -> safely(() -> runScraping(false));
+                case 3 -> safely(this::manageSources);
+                case 4 -> safely(this::showLogs);
+                case 5 -> safely(this::moderateVacancies);
+                case 6 -> safely(this::moderateUsers);
+                case 0 -> {
+                    return;
                 }
-            } catch (RuntimeException ex) {
-                out.println("[Ошибка] " + ex.getMessage());
+                default -> {
+                }
             }
         }
     }
 
-    private void printDashboard(PrintStream out) {
+    private void printDashboard() {
         DashboardStatsDto stats = moderationService.getDashboardStats();
-        out.println();
-        out.println("=== ПАНЕЛЬ УПРАВЛЕНИЯ ПАРСЕРАМИ И СБОРОМ ДАННЫХ ===");
+        out.println("\n=== ПАНЕЛЬ УПРАВЛЕНИЯ ПАРСЕРАМИ И СБОРОМ ДАННЫХ ===");
         out.println("Статистика базы данных:");
         out.println("- Всего активных вакансий: " + stats.activeVacancies());
         out.println("- Спарсено через Web Scraper: " + stats.websiteVacancies());
         out.println("- Спарсено через Telegram Mirror: " + stats.telegramVacancies());
         out.println("- Добавлено работодателями вручную: " + stats.manualVacancies());
         out.println("- Последний сбор: " + stats.lastParsingStartedAt() + " (" + stats.lastParsingStatus() + ")");
-        out.println("------------------------------------------------------------");
+        out.println(LINE);
     }
 
-    private void runScraping(InputValidator input, PrintStream out, boolean website) {
-        out.println();
-        out.println(website ? ">>> Запуск HTML Web Scraper..." : ">>> Запуск Telegram Web Mirror Extractor...");
+    private void runScraping(boolean website) {
+        out.println("\n" + (website
+                ? ">>> Запуск HTML Web Scraper..."
+                : ">>> Запуск Telegram Web Mirror Extractor..."));
         ParsingReportDto report = website
                 ? scraperCoordinatorService.runWebsiteScraping(out::println)
                 : scraperCoordinatorService.runTelegramScraping(out::println);
-        out.println();
-        out.println("=== ОТЧЁТ ПАРСИНГА ===");
+        out.println("\n=== ОТЧЁТ ПАРСИНГА ===");
         out.println("Найдено:            " + report.getItemsFound());
         out.println("Добавлено новых:    " + report.getItemsSaved());
         out.println("Отсеяно дубликатов: " + report.getDuplicatesSkipped());
@@ -91,39 +110,36 @@ public class AdminCliView {
         if (report.getSummary() != null) {
             out.println(report.getSummary());
         }
-        input.readOptionalString("Enter для продолжения > ");
+        pause();
     }
 
-    private void manageSources(InputValidator input, PrintStream out) {
-        boolean inSources = true;
-        while (inSources) {
+    private void manageSources() {
+        while (true) {
             List<ParsingSourceEntity> sources = moderationService.listSources();
-            out.println();
-            out.println("=== ИСТОЧНИКИ СБОРА ===");
+            out.println("\n=== ИСТОЧНИКИ СБОРА ===");
             out.println(tables.formatSources(sources));
             out.println("[1] Добавить URL  [2] Включить/выключить  [0] Назад");
-            int action = input.readIntInRange("Действие > ", 0, 2);
+            int action = in.readIntInRange("Действие > ", 0, 2);
             if (action == 0) {
-                inSources = false;
-            } else if (action == 1) {
+                return;
+            }
+            if (action == 1) {
                 ParsingSourceEntity created = moderationService.addSource(
-                        input.readRequiredString("Название > "),
-                        input.readIntInRange("Тип [1] WEBSITE [2] TELEGRAM > ", 1, 2) == 2
+                        in.readRequiredString("Название > "),
+                        in.readIntInRange("Тип [1] WEBSITE [2] TELEGRAM > ", 1, 2) == 2
                                 ? VacancySource.TELEGRAM : VacancySource.WEBSITE,
-                        input.readUrl("URL > ")
-                );
+                        in.readUrl("URL > "));
                 out.println("[OK] Источник #" + created.getId() + " добавлен");
             } else {
-                ParsingSourceEntity updated = moderationService.toggleSource(input.readLong("ID источника > "));
+                ParsingSourceEntity updated = moderationService.toggleSource(in.readLong("ID источника > "));
                 out.println("[OK] Источник #" + updated.getId() + " активен=" + updated.isActive());
             }
         }
     }
 
-    private void showLogs(PrintStream out) {
+    private void showLogs() {
         List<ParsingLogEntity> logs = parsingLogRepository.findTop20ByOrderByStartedAtDesc();
-        out.println();
-        out.println("=== ЖУРНАЛ ПАРСИНГА ===");
+        out.println("\n=== ЖУРНАЛ ПАРСИНГА ===");
         out.println(tables.formatLogs(logs));
         for (ParsingLogEntity log : logs) {
             if (log.getErrorMessage() != null && !log.getErrorMessage().isBlank()) {
@@ -132,13 +148,12 @@ public class AdminCliView {
         }
     }
 
-    private void moderateVacancies(InputValidator input, PrintStream out) {
+    private void moderateVacancies() {
         List<VacancyEntity> vacancies = moderationService.listRecentVacancies();
-        out.println();
-        out.println("=== МОДЕРАЦИЯ ВАКАНСИЙ ===");
+        out.println("\n=== МОДЕРАЦИЯ ВАКАНСИЙ ===");
         out.println(tables.formatVacancies(vacancies));
         out.println("[1] В архив (скрыть)  [2] Отклонить  [3] Вернуть ACTIVE  [0] Назад");
-        int action = input.readIntInRange("Действие > ", 0, 3);
+        int action = in.readIntInRange("Действие > ", 0, 3);
         if (action == 0) {
             return;
         }
@@ -147,21 +162,20 @@ public class AdminCliView {
             case 3 -> VacancyStatus.ACTIVE;
             default -> VacancyStatus.ARCHIVED;
         };
-        VacancyEntity updated = moderationService.changeVacancyStatus(input.readLong("ID вакансии > "), status);
+        VacancyEntity updated = moderationService.changeVacancyStatus(in.readLong("ID вакансии > "), status);
         out.println("[OK] Вакансия #" + updated.getId() + " → " + updated.getStatus());
     }
 
-    private void moderateUsers(InputValidator input, PrintStream out) {
+    private void moderateUsers() {
         List<UserEntity> users = moderationService.listUsers();
-        out.println();
-        out.println("=== ПОЛЬЗОВАТЕЛИ ===");
+        out.println("\n=== ПОЛЬЗОВАТЕЛИ ===");
         out.println(tables.formatUsers(users));
         out.println("[1] Заблокировать  [2] Разблокировать  [0] Назад");
-        int action = input.readIntInRange("Действие > ", 0, 2);
+        int action = in.readIntInRange("Действие > ", 0, 2);
         if (action == 0) {
             return;
         }
-        UserEntity updated = moderationService.setUserActive(input.readLong("ID пользователя > "), action == 2);
+        UserEntity updated = moderationService.setUserActive(in.readLong("ID пользователя > "), action == 2);
         out.println("[OK] Пользователь " + updated.getEmail() + " активен=" + updated.isActive());
     }
 }

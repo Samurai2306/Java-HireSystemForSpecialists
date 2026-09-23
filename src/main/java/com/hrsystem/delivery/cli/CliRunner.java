@@ -2,35 +2,28 @@ package com.hrsystem.delivery.cli;
 
 import com.hrsystem.delivery.cli.utils.AnsiColor;
 import com.hrsystem.delivery.cli.utils.InputValidator;
-import com.hrsystem.delivery.cli.views.AdminCliView;
+import com.hrsystem.delivery.cli.views.AbstractCliView;
 import com.hrsystem.delivery.cli.views.AuthCliView;
-import com.hrsystem.delivery.cli.views.CandidateCliView;
-import com.hrsystem.delivery.cli.views.EmployerCliView;
+import com.hrsystem.delivery.cli.views.RoleMenu;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
+/** Точка входа CLI: показывает экран аутентификации, затем полиморфно открывает меню роли. */
 @Component
 @Order(100)
-public class CliRunner implements CommandLineRunner {
+public class CliRunner extends AbstractCliView implements CommandLineRunner {
 
     private final AuthCliView authCliView;
-    private final CandidateCliView candidateCliView;
-    private final EmployerCliView employerCliView;
-    private final AdminCliView adminCliView;
-    private final CliSessionContext sessionContext;
-    private final InputValidator inputValidator = new InputValidator();
+    private final List<RoleMenu> roleMenus;
 
-    public CliRunner(AuthCliView authCliView,
-                     CandidateCliView candidateCliView,
-                     EmployerCliView employerCliView,
-                     AdminCliView adminCliView,
-                     CliSessionContext sessionContext) {
+    public CliRunner(AuthCliView authCliView, List<RoleMenu> roleMenus,
+                     CliSessionContext sessionContext, InputValidator input) {
+        super(sessionContext, input, System.out);
         this.authCliView = authCliView;
-        this.candidateCliView = candidateCliView;
-        this.employerCliView = employerCliView;
-        this.adminCliView = adminCliView;
-        this.sessionContext = sessionContext;
+        this.roleMenus = roleMenus;
     }
 
     @Override
@@ -38,31 +31,20 @@ public class CliRunner implements CommandLineRunner {
         if (cliDisabled(args)) {
             return;
         }
-        System.out.println(AnsiColor.colorize(
+        out.println(AnsiColor.colorize(
                 "HR-SYSTEM  ·  Agile Recruitment Platform  ·  CLI v1.0",
                 AnsiColor.BOLD + AnsiColor.CYAN));
 
-        while (true) {
-            if (!sessionContext.isAuthorized() && !authCliView.showMainMenu()) {
-                return;
-            }
-            if (sessionContext.isCandidate()) {
-                candidateCliView.showCandidateDashboard();
-            } else if (sessionContext.isGuest()) {
-                candidateCliView.showVacancyCatalog();
-                sessionContext.logout();
-            } else if (sessionContext.isEmployer()) {
-                var profile = sessionContext.getCurrentEmployerProfile();
-                if (profile != null) {
-                    employerCliView.show(profile.getId(), sessionContext.getCurrentUserId(), inputValidator, System.out);
-                } else {
-                    System.out.println(AnsiColor.error("Профиль работодателя не найден."));
-                }
-                sessionContext.logout();
-            } else if (sessionContext.isAdmin()) {
-                adminCliView.show(inputValidator, System.out);
+        try {
+            while (authCliView.showMainMenu()) {
+                roleMenus.stream()
+                        .filter(menu -> menu.supports(sessionContext.getCurrentRole()))
+                        .findFirst()
+                        .ifPresent(menu -> safely(menu::open));
                 sessionContext.logout();
             }
+        } catch (RuntimeException e) {
+            err("Критическая ошибка: " + rootMessage(e));
         }
     }
 

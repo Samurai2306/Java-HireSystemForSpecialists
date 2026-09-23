@@ -17,13 +17,20 @@ import java.util.Optional;
 @Repository
 public interface VacancyRepository extends JpaRepository<VacancyEntity, Long> {
 
-    @Query("SELECT v FROM VacancyEntity v WHERE v.status = :status " +
-           "AND (:source IS NULL OR v.sourceType = :source) " +
-           "AND (:minSalary IS NULL OR (v.salaryMax >= :minSalary OR (v.salaryMin IS NOT NULL AND v.salaryMin >= :minSalary))) " +
-           "AND (:keyword IS NULL OR LOWER(v.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "     OR LOWER(v.companyName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "     OR LOWER(v.requirementsStack) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "     OR LOWER(v.description) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+    /**
+     * Каталог активных вакансий. Параметры-заглушки (ALL, 0, "") вместо null:
+     * Hibernate 6 не типизирует NULL-параметры в PostgreSQL и запрос падает с "lower(bytea) does not exist".
+     */
+    @Query("""
+            SELECT v FROM VacancyEntity v
+            WHERE v.status = :status
+              AND (:source = com.hrsystem.domain.enums.VacancySource.ALL OR v.sourceType = :source)
+              AND (:minSalary <= 0 OR v.salaryMax >= :minSalary OR (v.salaryMin IS NOT NULL AND v.salaryMin >= :minSalary))
+              AND (:keyword = '' OR LOWER(v.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(v.companyName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(v.requirementsStack) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(v.description) LIKE LOWER(CONCAT('%', :keyword, '%')))
+            """)
     Page<VacancyEntity> findWithFilters(
             @Param("status") VacancyStatus status,
             @Param("source") VacancySource source,
@@ -51,12 +58,12 @@ public interface VacancyRepository extends JpaRepository<VacancyEntity, Long> {
     @Query("""
             SELECT v FROM VacancyEntity v
             WHERE v.status = com.hrsystem.domain.enums.VacancyStatus.ACTIVE
-              AND (:keyword IS NULL OR LOWER(v.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              AND (:keyword = '' OR LOWER(v.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(v.companyName) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(COALESCE(v.requirementsStack, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(v.description) LIKE LOWER(CONCAT('%', :keyword, '%')))
-              AND (:salaryMin IS NULL OR COALESCE(v.salaryMax, v.salaryMin) >= :salaryMin)
-              AND (:sourceType IS NULL OR v.sourceType = :sourceType)
+              AND (:salaryMin <= 0 OR COALESCE(v.salaryMax, v.salaryMin) >= :salaryMin)
+              AND (:sourceType = com.hrsystem.domain.enums.VacancySource.ALL OR v.sourceType = :sourceType)
             """)
     Page<VacancyEntity> searchActive(
             @Param("keyword") String keyword,

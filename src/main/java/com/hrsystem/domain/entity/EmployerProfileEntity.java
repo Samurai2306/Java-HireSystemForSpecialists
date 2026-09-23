@@ -16,7 +16,7 @@ public class EmployerProfileEntity {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private UserEntity user;
 
-    @Column(name = "company_name", nullable = false, length = 255)
+    @Column(name = "company_name", nullable =  false, length = 255)
     private String companyName;
 
     @Column(name = "contact_person", length = 255)

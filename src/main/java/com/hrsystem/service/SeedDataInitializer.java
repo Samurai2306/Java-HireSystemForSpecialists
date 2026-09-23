@@ -13,6 +13,7 @@ import com.hrsystem.repository.UserRepository;
 import com.hrsystem.repository.VacancyRepository;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
+/**
+ * Наполняет базу демо-данными. Запускается раньше CLI (@Order(10) против @Order(100) у CliRunner),
+ * иначе каталог и демо-учётки были бы пустыми при первом запуске.
+ */
 @Component
+@Order(10)
 public class SeedDataInitializer implements ApplicationRunner {
 
     private final UserRepository userRepository;

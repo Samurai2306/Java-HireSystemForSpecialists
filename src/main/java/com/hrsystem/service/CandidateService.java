@@ -1,8 +1,6 @@
 package com.hrsystem.service;
 
-import com.hrsystem.domain.entity.ApplicationEntity;
 import com.hrsystem.domain.entity.CandidateProfileEntity;
-import com.hrsystem.domain.entity.VacancyEntity;
 import com.hrsystem.dto.request.ApplyVacancyDto;
 import com.hrsystem.dto.request.CandidateProfileUpdateDto;
 import com.hrsystem.dto.request.VacancyFilterDto;
@@ -30,13 +28,4 @@ public interface CandidateService {
     CandidateProfileEntity getProfile(Long candidateUserId);
 
     CandidateProfileEntity updateProfile(Long candidateUserId, CandidateProfileUpdateDto dto);
-
-    VacancyEntity getVacancy(Long vacancyId);
-
-    List<ApplicationEntity> listMyApplications(Long candidateProfileId);
-
-    ApplicationEntity getMyApplication(Long candidateProfileId, Long applicationId);
-
-    CandidateProfileEntity updateProfile(Long candidateProfileId, String fullName, String targetTitle,
-                                         String skills, String phone, String telegram, String portfolioLinks);
 }

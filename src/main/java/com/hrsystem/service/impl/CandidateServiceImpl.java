@@ -64,17 +64,10 @@ public class CandidateServiceImpl implements CandidateService {
                 Sort.by(Sort.Direction.DESC, "publishedAt")
         );
 
-        VacancySource sourceParam = (filter.getSource() != null && filter.getSource() != VacancySource.ALL)
-                ? filter.getSource()
-                : null;
-
-        String keywordParam = (filter.getKeyword() != null && !filter.getKeyword().trim().isEmpty())
-                ? filter.getKeyword().trim()
-                : null;
-
-        Integer minSalaryParam = (filter.getSalaryMin() != null && filter.getSalaryMin() > 0)
-                ? filter.getSalaryMin()
-                : null;
+        // Заглушки вместо null: NULL-параметры в PostgreSQL ломают типизацию запроса.
+        VacancySource sourceParam = filter.getSource() != null ? filter.getSource() : VacancySource.ALL;
+        String keywordParam = filter.hasKeyword() ? filter.getKeyword().trim() : "";
+        int minSalaryParam = filter.hasSalaryMin() ? filter.getSalaryMin() : 0;
 
         Page<VacancyEntity> entityPage = vacancyRepository.findWithFilters(
                 VacancyStatus.ACTIVE,
@@ -94,10 +87,7 @@ public class CandidateServiceImpl implements CandidateService {
             throw new ValidationException("ID вакансии не может быть null.");
         }
 
-        VacancyEntity vacancy = vacancyRepository.findById(vacancyId)
-                .orElseThrow(() -> new EntityNotFoundException("Вакансия с ID " + vacancyId + " не найдена."));
-
-        return mapToDetailsDto(vacancy);
+        return mapToDetailsDto(findVacancy(vacancyId));
     }
 
     @Override
@@ -110,11 +100,9 @@ public class CandidateServiceImpl implements CandidateService {
             throw new ValidationException("Не указан ID вакансии для отклика.");
         }
 
-        CandidateProfileEntity candidate = candidateProfileRepository.findByUserId(candidateUserId)
-                .orElseThrow(() -> new EntityNotFoundException("Профиль соискателя не найден для пользователя ID " + candidateUserId));
+        CandidateProfileEntity candidate = findCandidate(candidateUserId);
 
-        VacancyEntity vacancy = vacancyRepository.findById(dto.getVacancyId())
-                .orElseThrow(() -> new EntityNotFoundException("Вакансия с ID " + dto.getVacancyId() + " не найдена."));
+        VacancyEntity vacancy = findVacancy(dto.getVacancyId());
 
         if (vacancy.getStatus() != VacancyStatus.ACTIVE) {
             throw new ValidationException("Невозможно подать отклик: вакансия не активна или находится в архиве.");
@@ -152,8 +140,7 @@ public class CandidateServiceImpl implements CandidateService {
             throw new ValidationException("Пользователь не авторизован.");
         }
 
-        CandidateProfileEntity candidate = candidateProfileRepository.findByUserId(candidateUserId)
-                .orElseThrow(() -> new EntityNotFoundException("Профиль соискателя не найден для пользователя ID " + candidateUserId));
+        CandidateProfileEntity candidate = findCandidate(candidateUserId);
 
         List<ApplicationEntity> list = applicationRepository.findByCandidateProfileIdOrderByCreatedAtDesc(candidate.getId());
         return list.stream().map(this::mapToApplicationDto).collect(Collectors.toList());
@@ -169,8 +156,7 @@ public class CandidateServiceImpl implements CandidateService {
             throw new ValidationException("ID отклика не указан.");
         }
 
-        CandidateProfileEntity candidate = candidateProfileRepository.findByUserId(candidateUserId)
-                .orElseThrow(() -> new EntityNotFoundException("Профиль соискателя не найден."));
+        CandidateProfileEntity candidate = findCandidate(candidateUserId);
 
         ApplicationEntity application = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new EntityNotFoundException("Отклик с ID " + applicationId + " не найден."));
@@ -192,8 +178,7 @@ public class CandidateServiceImpl implements CandidateService {
             throw new ValidationException("ID отклика не указан.");
         }
 
-        CandidateProfileEntity candidate = candidateProfileRepository.findByUserId(candidateUserId)
-                .orElseThrow(() -> new EntityNotFoundException("Профиль соискателя не найден."));
+        CandidateProfileEntity candidate = findCandidate(candidateUserId);
 
         ApplicationEntity application = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new EntityNotFoundException("Отклик с ID " + applicationId + " не найден."));
@@ -222,8 +207,7 @@ public class CandidateServiceImpl implements CandidateService {
         if (candidateUserId == null) {
             throw new ValidationException("Пользователь не авторизован.");
         }
-        return candidateProfileRepository.findByUserId(candidateUserId)
-                .orElseThrow(() -> new EntityNotFoundException("Профиль соискателя не найден."));
+        return findCandidate(candidateUserId);
     }
 
     @Override
@@ -236,8 +220,7 @@ public class CandidateServiceImpl implements CandidateService {
             throw new ValidationException("Данные для обновления профиля не переданы.");
         }
 
-        CandidateProfileEntity profile = candidateProfileRepository.findByUserId(candidateUserId)
-                .orElseThrow(() -> new EntityNotFoundException("Профиль соискателя не найден."));
+        CandidateProfileEntity profile = findCandidate(candidateUserId);
 
         if (dto.getFullName() != null && !dto.getFullName().trim().isEmpty()) {
             profile.setFullName(dto.getFullName().trim());
@@ -261,43 +244,14 @@ public class CandidateServiceImpl implements CandidateService {
         return candidateProfileRepository.save(profile);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public VacancyEntity getVacancy(Long vacancyId) {
+    private CandidateProfileEntity findCandidate(Long candidateUserId) {
+        return candidateProfileRepository.findByUserId(candidateUserId)
+                .orElseThrow(() -> new EntityNotFoundException("Профиль соискателя не найден."));
+    }
+
+    private VacancyEntity findVacancy(Long vacancyId) {
         return vacancyRepository.findById(vacancyId)
-                .orElseThrow(() -> new EntityNotFoundException("Вакансия #" + vacancyId + " не найдена"));
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<ApplicationEntity> listMyApplications(Long candidateProfileId) {
-        return applicationRepository.findByCandidateProfileIdOrderByCreatedAtDesc(candidateProfileId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public ApplicationEntity getMyApplication(Long candidateProfileId, Long applicationId) {
-        ApplicationEntity app = applicationRepository.findById(applicationId)
-                .orElseThrow(() -> new EntityNotFoundException("Отклик #" + applicationId + " не найден"));
-        if (!candidateProfileId.equals(app.getCandidate().getId())) {
-            throw new AccessDeniedException("Нельзя просматривать чужой отклик");
-        }
-        return app;
-    }
-
-    @Override
-    @Transactional
-    public CandidateProfileEntity updateProfile(Long candidateProfileId, String fullName, String targetTitle,
-                                                 String skills, String phone, String telegram, String portfolioLinks) {
-        CandidateProfileEntity profile = candidateProfileRepository.findById(candidateProfileId)
-                .orElseThrow(() -> new EntityNotFoundException("Профиль соискателя #" + candidateProfileId + " не найден"));
-        if (fullName != null && !fullName.isBlank()) profile.setFullName(fullName.trim());
-        if (targetTitle != null) profile.setTargetTitle(targetTitle.isBlank() ? null : targetTitle.trim());
-        if (skills != null) profile.setSkills(skills.isBlank() ? null : skills.trim());
-        if (phone != null) profile.setPhone(phone.isBlank() ? null : phone.trim());
-        if (telegram != null) profile.setTelegram(telegram.isBlank() ? null : telegram.trim());
-        if (portfolioLinks != null) profile.setPortfolioLinks(portfolioLinks.isBlank() ? null : portfolioLinks.trim());
-        return candidateProfileRepository.save(profile);
+                .orElseThrow(() -> new EntityNotFoundException("Вакансия с ID " + vacancyId + " не найдена."));
     }
 
     private String generateDefaultCoverLetter(CandidateProfileEntity candidate, VacancyEntity vacancy) {

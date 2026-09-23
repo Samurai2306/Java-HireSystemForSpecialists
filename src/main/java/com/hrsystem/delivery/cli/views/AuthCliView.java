@@ -16,27 +16,24 @@ import org.springframework.stereotype.Component;
 
 import java.io.PrintStream;
 
+/** Стартовое меню: вход, регистрация соискателя/работодателя, гостевой режим. */
 @Component
-public class AuthCliView {
+public class AuthCliView extends AbstractCliView {
 
     private final AuthService authService;
-    private final CliSessionContext sessionContext;
-    private final InputValidator inputValidator;
-    private final PrintStream out;
 
     @Autowired
-    public AuthCliView(AuthService authService, CliSessionContext sessionContext) {
-        this(authService, sessionContext, new InputValidator(), System.out);
+    public AuthCliView(AuthService authService, CliSessionContext sessionContext, InputValidator input) {
+        this(authService, sessionContext, input, System.out);
     }
 
     public AuthCliView(AuthService authService, CliSessionContext sessionContext,
-                       InputValidator inputValidator, PrintStream out) {
+                       InputValidator input, PrintStream out) {
+        super(sessionContext, input, out);
         this.authService = authService;
-        this.sessionContext = sessionContext;
-        this.inputValidator = inputValidator;
-        this.out = out;
     }
 
+    /** @return false, только если пользователь выбрал выход из программы. */
     public boolean showMainMenu() {
         while (true) {
             out.println("\n" + AnsiColor.colorize("================================================", AnsiColor.CYAN));
@@ -47,27 +44,30 @@ public class AuthCliView {
             out.println("  3. Регистрация работодателя (Employer)");
             out.println("  4. Гостевой просмотр каталога (Guest)");
             out.println("  0. Выход из программы");
-            out.println(AnsiColor.colorize("------------------------------------------------", AnsiColor.GRAY));
+            out.println(AnsiColor.colorize(LINE, AnsiColor.GRAY));
 
-            int choice = inputValidator.readIntInRange("Выберите действие [0-4]: ", 0, 4);
-            switch (choice) {
+            switch (in.readIntInRange("Выберите действие [0-4]: ", 0, 4)) {
                 case 1:
-                    boolean loggedIn = handleLogin();
-                    if (loggedIn) {
+                    if (handleLogin()) {
                         return true;
                     }
                     break;
                 case 2:
-                    handleCandidateRegistration();
+                    if (handleCandidateRegistration()) {
+                        return true;
+                    }
                     break;
                 case 3:
-                    handleEmployerRegistration();
+                    if (handleEmployerRegistration()) {
+                        return true;
+                    }
                     break;
                 case 4:
                     sessionContext.logout();
-                    out.println(AnsiColor.info("Вход в режиме Гостя (только просмотр каталога)."));
+                    info("Вход в режиме Гостя (только просмотр каталога).");
                     return true;
                 case 0:
+                default:
                     out.println(AnsiColor.colorize("До свидания!", AnsiColor.YELLOW));
                     return false;
             }
@@ -76,49 +76,29 @@ public class AuthCliView {
 
     public boolean handleLogin() {
         out.println("\n" + AnsiColor.colorize("--- Авторизация в системе ---", AnsiColor.BOLD));
-        String email = inputValidator.readEmail("Email: ");
-        String password = inputValidator.readNonEmptyString("Пароль: ");
+        String email = in.readEmail("Email: ");
+        String password = in.readRequiredString("Пароль: ");
 
         try {
             UserEntity user = authService.login(new UserLoginDto(email, password));
-            switch (user.getRole()) {
-                case CANDIDATE:
-                    CandidateProfileEntity candidateProfile = authService.getCandidateProfile(user);
-                    sessionContext.setCandidateSession(user, candidateProfile);
-                    String candidateName = candidateProfile != null ? candidateProfile.getFullName() : user.getEmail();
-                    out.println(AnsiColor.success("Успешный вход! Добро пожаловать, " + candidateName + "!"));
-                    break;
-                case EMPLOYER:
-                    EmployerProfileEntity employerProfile = authService.getEmployerProfile(user);
-                    sessionContext.setEmployerSession(user, employerProfile);
-                    String compName = employerProfile != null ? employerProfile.getCompanyName() : user.getEmail();
-                    out.println(AnsiColor.success("Успешный вход! Компания: " + compName));
-                    break;
-                case ADMIN:
-                    sessionContext.setAdminSession(user);
-                    out.println(AnsiColor.success("Успешный вход с правами Администратора!"));
-                    break;
-                default:
-                    sessionContext.logout();
-                    break;
-            }
+            activateSession(user);
             return true;
         } catch (AuthenticationException | ValidationException e) {
-            out.println(AnsiColor.error("Ошибка авторизации: " + e.getMessage()));
+            err("Ошибка авторизации: " + e.getMessage());
             return false;
         }
     }
 
-    public void handleCandidateRegistration() {
-        out.println("\n" + AnsiColor.colorize("--- Регистрация нового Соискателя ---", AnsiColor.BOLD));
-        String email = inputValidator.readEmail("Введите Email: ");
-        String password = inputValidator.readPassword("Придумайте пароль (мин. 4 символа): ");
-        String fullName = inputValidator.readNonEmptyString("ФИО: ");
-        String targetTitle = inputValidator.readOptionalString("Желаемая должность (например, Java Developer): ", null);
-        String skills = inputValidator.readOptionalString("Стек технологий и навыки (через запятую): ", null);
-        String phone = inputValidator.readOptionalString("Телефон: ", null);
-        String telegram = inputValidator.readOptionalString("Telegram (@username): ", null);
-        String portfolio = inputValidator.readOptionalString("Ссылки на GitHub / портфолио: ", null);
+    public boolean handleCandidateRegistration() {
+        out.println("\n" + AnsiColor.colorize("--- Регистрация соискателя (все поля обязательны) ---", AnsiColor.BOLD));
+        String email = in.readEmail("1/8 Email: ");
+        String password = in.readPassword("2/8 Пароль (мин. 4 символа): ");
+        String fullName = in.readRequiredString("3/8 ФИО: ");
+        String targetTitle = in.readRequiredString("4/8 Желаемая должность (например, Java Developer): ");
+        String skills = in.readRequiredString("5/8 Стек технологий и навыки (через запятую): ");
+        String phone = in.readPhone("6/8 Телефон (пример: +7 (999) 123-45-67): ");
+        String telegram = in.readTelegram("7/8 Telegram (@username): ");
+        String portfolio = in.readUrl("8/8 Ссылка на GitHub / портфолио: ");
 
         UserRegistrationDto dto = new UserRegistrationDto(
                 email, password, fullName, targetTitle, skills, phone, telegram, portfolio
@@ -126,29 +106,53 @@ public class AuthCliView {
 
         try {
             UserEntity registeredUser = authService.registerCandidate(dto);
-            CandidateProfileEntity profile = authService.getCandidateProfile(registeredUser);
-            sessionContext.setCandidateSession(registeredUser, profile);
-            out.println(AnsiColor.success("Регистрация соискателя успешно завершена! Сессия активирована."));
+            sessionContext.setCandidateSession(registeredUser, authService.getCandidateProfile(registeredUser));
+            ok("Регистрация соискателя успешно завершена!");
+            return true;
         } catch (ValidationException e) {
-            out.println(AnsiColor.error("Ошибка при регистрации: " + e.getMessage()));
+            err("Ошибка при регистрации: " + e.getMessage());
+            return false;
         }
     }
 
-    public void handleEmployerRegistration() {
-        out.println("\n" + AnsiColor.colorize("--- Регистрация нового Работодателя ---", AnsiColor.BOLD));
-        String email = inputValidator.readEmail("Введите рабочий Email: ");
-        String password = inputValidator.readPassword("Придумайте пароль (мин. 4 символа): ");
-        String companyName = inputValidator.readNonEmptyString("Название компании: ");
-        String contactPerson = inputValidator.readOptionalString("Контактное лицо (ФИО HR): ", null);
-        String websiteUrl = inputValidator.readOptionalString("Сайт компании: ", null);
+    public boolean handleEmployerRegistration() {
+        out.println("\n" + AnsiColor.colorize("--- Регистрация работодателя (все поля обязательны) ---", AnsiColor.BOLD));
+        String email = in.readEmail("1/5 Рабочий Email: ");
+        String password = in.readPassword("2/5 Пароль (мин. 4 символа): ");
+        String companyName = in.readRequiredString("3/5 Название компании: ");
+        String contactPerson = in.readRequiredString("4/5 Контактное лицо (ФИО HR): ");
+        String websiteUrl = in.readUrl("5/5 Сайт компании (http:// или https://): ");
 
         try {
             UserEntity registeredUser = authService.registerEmployer(email, password, companyName, contactPerson, websiteUrl);
-            EmployerProfileEntity profile = authService.getEmployerProfile(registeredUser);
-            sessionContext.setEmployerSession(registeredUser, profile);
-            out.println(AnsiColor.success("Регистрация работодателя успешно завершена! Сессия активирована."));
+            sessionContext.setEmployerSession(registeredUser, authService.getEmployerProfile(registeredUser));
+            ok("Регистрация работодателя успешно завершена!");
+            return true;
         } catch (ValidationException e) {
-            out.println(AnsiColor.error("Ошибка при регистрации: " + e.getMessage()));
+            err("Ошибка при регистрации: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private void activateSession(UserEntity user) {
+        switch (user.getRole()) {
+            case CANDIDATE -> {
+                CandidateProfileEntity profile = authService.getCandidateProfile(user);
+                sessionContext.setCandidateSession(user, profile);
+                String name = profile != null ? profile.getFullName() : user.getEmail();
+                ok("Успешный вход! Добро пожаловать, " + name + "!");
+            }
+            case EMPLOYER -> {
+                EmployerProfileEntity profile = authService.getEmployerProfile(user);
+                sessionContext.setEmployerSession(user, profile);
+                String company = profile != null ? profile.getCompanyName() : user.getEmail();
+                ok("Успешный вход! Компания: " + company);
+            }
+            case ADMIN -> {
+                sessionContext.setAdminSession(user);
+                ok("Успешный вход с правами Администратора!");
+            }
+            default -> sessionContext.logout();
         }
     }
 }

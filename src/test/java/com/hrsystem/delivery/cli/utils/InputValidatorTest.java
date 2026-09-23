@@ -43,6 +43,37 @@ class InputValidatorTest {
         assertEquals(12, validator.readOptionalInt("> "));
     }
 
+    @Test
+    void phoneValidation_rejectsLettersAndWrongLength() {
+        InputValidator validator = validator("79260822ы\n792608220181231231231\n+7 (999) 123-45-67\n");
+
+        assertEquals("+7 (999) 123-45-67", validator.readPhone("phone > "));
+
+        assertTrue(validator.isPhone("89991234567"));
+        assertTrue(validator.isPhone("+7 999 123-45-67"));
+        assertFalse(validator.isPhone("79260822ы"));
+        assertFalse(validator.isPhone("123"));
+        assertFalse(validator.isPhone("792608220181231231231"));
+    }
+
+    @Test
+    void telegramValidation_requiresAtAndLatin() {
+        InputValidator validator = validator("her\n@her_dev\n");
+
+        assertEquals("@her_dev", validator.readTelegram("tg > "));
+
+        assertTrue(validator.isTelegram("@her"));
+        assertFalse(validator.isTelegram("her"));
+        assertFalse(validator.isTelegram("@her@dev"));
+    }
+
+    @Test
+    void urlAcceptsBareDomainAndAddsHttps() {
+        InputValidator validator = validator("github.com/user\n");
+
+        assertEquals("https://github.com/user", validator.readUrl("url > "));
+    }
+
     private InputValidator validator(String input) {
         Scanner scanner = new Scanner(input);
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();

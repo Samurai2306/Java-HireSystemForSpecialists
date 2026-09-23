@@ -8,5 +8,18 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
+    properties:
+      hibernate:
+        show_sql: false
+        format_sql: false
   flyway:
     enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.hrsystem: INFO
+    org.hibernate: WARN
+    org.hibernate.SQL: OFF
+    org.hibernate.orm.jdbc.bind: OFF
+    com.zaxxer.hikari: WARN

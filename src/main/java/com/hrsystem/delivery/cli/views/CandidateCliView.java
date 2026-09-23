@@ -5,7 +5,7 @@ import com.hrsystem.delivery.cli.utils.AnsiColor;
 import com.hrsystem.delivery.cli.utils.ConsoleTableFormatter;
 import com.hrsystem.delivery.cli.utils.InputValidator;
 import com.hrsystem.domain.entity.CandidateProfileEntity;
-import com.hrsystem.domain.enums.ApplicationStatus;
+import com.hrsystem.domain.enums.UserRole;
 import com.hrsystem.domain.enums.VacancySource;
 import com.hrsystem.dto.request.ApplyVacancyDto;
 import com.hrsystem.dto.request.CandidateProfileUpdateDto;
@@ -13,11 +13,6 @@ import com.hrsystem.dto.request.VacancyFilterDto;
 import com.hrsystem.dto.response.ApplicationDto;
 import com.hrsystem.dto.response.VacancyDetailsDto;
 import com.hrsystem.dto.response.VacancySummaryDto;
-import com.hrsystem.exception.AccessDeniedException;
-import com.hrsystem.exception.DuplicateApplicationException;
-import com.hrsystem.exception.EntityNotFoundException;
-import com.hrsystem.exception.InvalidStateTransitionException;
-import com.hrsystem.exception.ValidationException;
 import com.hrsystem.service.CandidateService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -26,390 +21,322 @@ import org.springframework.stereotype.Component;
 import java.io.PrintStream;
 import java.util.List;
 
+/** Личный кабинет соискателя и гостевой каталог вакансий. */
 @Component
-public class CandidateCliView {
+public class CandidateCliView extends AbstractCliView implements RoleMenu {
+
+    private static final List<String> CATALOG_COMMANDS = List.of(
+            "Команды: [N] След. стр | [P] Пред. стр | [F] Фильтры | [C] Сброс фильтров",
+            "         [D] Детали вакансии | [O] Откликнуться | [B] Назад в меню");
 
     private final CandidateService candidateService;
-    private final CliSessionContext sessionContext;
-    private final InputValidator inputValidator;
-    private final PrintStream out;
 
     @Autowired
-    public CandidateCliView(CandidateService candidateService, CliSessionContext sessionContext) {
-        this(candidateService, sessionContext, new InputValidator(), System.out);
+    public CandidateCliView(CandidateService candidateService, CliSessionContext sessionContext, InputValidator input) {
+        this(candidateService, sessionContext, input, System.out);
     }
 
     public CandidateCliView(CandidateService candidateService, CliSessionContext sessionContext,
-                            InputValidator inputValidator, PrintStream out) {
+                            InputValidator input, PrintStream out) {
+        super(sessionContext, input, out);
         this.candidateService = candidateService;
-        this.sessionContext = sessionContext;
-        this.inputValidator = inputValidator;
-        this.out = out;
     }
 
-    public void show(Long candidateProfileId, Long userId, InputValidator input, PrintStream out) {
-        showCandidateDashboard();
+    @Override
+    public boolean supports(UserRole role) {
+        return role == UserRole.CANDIDATE || role == UserRole.GUEST;
+    }
+
+    @Override
+    public void open() {
+        if (sessionContext.isCandidate()) {
+            showCandidateDashboard();
+        } else {
+            showVacancyCatalog();
+        }
     }
 
     public void showCandidateDashboard() {
-        boolean inMenu = true;
-        while (inMenu) {
+        while (true) {
             String userName = sessionContext.getCurrentCandidateProfile() != null
                     ? sessionContext.getCurrentCandidateProfile().getFullName()
-                    : (sessionContext.getCurrentUser() != null ? sessionContext.getCurrentUser().getEmail() : "Гость");
-
-            out.println("\n" + AnsiColor.colorize("================================================", AnsiColor.BLUE));
-            out.println(AnsiColor.colorize("         ЛИЧНЫЙ КАБИНЕТ СОИСКАТЕЛЯ: " + userName, AnsiColor.BOLD + AnsiColor.BLUE));
-            out.println(AnsiColor.colorize("================================================", AnsiColor.BLUE));
+                    : sessionContext.getCurrentUser().getEmail();
+            header("ЛИЧНЫЙ КАБИНЕТ СОИСКАТЕЛЯ: " + userName, AnsiColor.BLUE);
             out.println("  1. Каталог вакансий и фильтры");
             out.println("  2. Мои отклики и трекер заявок");
             out.println("  3. Мой профиль / Резюме");
             out.println("  0. Выход из аккаунта (Logout)");
-            out.println(AnsiColor.colorize("------------------------------------------------", AnsiColor.GRAY));
+            out.println(AnsiColor.colorize(LINE, AnsiColor.GRAY));
 
-            int choice = inputValidator.readIntInRange("Выберите раздел [0-3]: ", 0, 3);
-            switch (choice) {
-                case 1:
-                    showVacancyCatalog();
-                    break;
-                case 2:
-                    showMyApplications();
-                    break;
-                case 3:
-                    showCandidateProfile();
-                    break;
-                case 0:
+            switch (in.readIntInRange("Выберите раздел [0-3]: ", 0, 3)) {
+                case 1 -> safely(this::showVacancyCatalog);
+                case 2 -> safely(this::showMyApplications);
+                case 3 -> safely(this::showCandidateProfile);
+                case 0 -> {
                     sessionContext.logout();
-                    out.println(AnsiColor.info("Вы вышли из учетной записи."));
-                    inMenu = false;
-                    break;
+                    info("Вы вышли из учетной записи.");
+                    return;
+                }
+                default -> {
+                }
             }
         }
     }
 
     public void showVacancyCatalog() {
         VacancyFilterDto filter = new VacancyFilterDto();
-        boolean browsing = true;
-
-        while (browsing) {
+        while (true) {
             Page<VacancySummaryDto> page = candidateService.searchVacancies(filter);
 
-            out.println("\n" + AnsiColor.colorize("--- КАТАЛОГ ВАКАНСИЙ ---", AnsiColor.BOLD));
+            header("КАТАЛОГ ВАКАНСИЙ");
             printActiveFilters(filter);
-
             ConsoleTableFormatter table = new ConsoleTableFormatter("ID", "Должность", "Компания", "Зарплата", "Источник", "Дата");
             for (VacancySummaryDto v : page.getContent()) {
-                table.addRow(
-                        String.valueOf(v.getId()),
-                        v.getTitle(),
-                        v.getCompanyName(),
-                        v.getSalaryFormatted(),
-                        v.getSourceFormatted(),
-                        v.getPublishedDateFormatted()
-                );
+                table.addRow(String.valueOf(v.getId()), v.getTitle(), v.getCompanyName(),
+                        v.getSalaryFormatted(), v.getSourceFormatted(), v.getPublishedDateFormatted());
             }
             out.println(table.render());
 
             int totalPages = Math.max(1, page.getTotalPages());
-            out.println(String.format("Страница %s из %s (Всего вакансий: %s)",
-                    AnsiColor.colorize(String.valueOf(filter.getPageNumber()), AnsiColor.BOLD),
-                    totalPages,
-                    page.getTotalElements()));
+            out.println("Страница " + filter.getPageNumber() + " из " + totalPages
+                    + " (Всего вакансий: " + page.getTotalElements() + ")");
+            out.println(AnsiColor.colorize(LINE, AnsiColor.GRAY));
+            CATALOG_COMMANDS.forEach(out::println);
 
-            out.println(AnsiColor.colorize("----------------------------------------------------------------------", AnsiColor.GRAY));
-            out.println("Команды: [N] След. стр | [P] Пред. стр | [F] Фильтры | [C] Сброс фильтров");
-            out.println("         [D] Детали вакансии | [O] Откликнуться | [B] Назад в меню");
-
-            String cmd = inputValidator.readCommand("Введите команду: ").toUpperCase();
-            switch (cmd) {
-                case "N":
-                    if (filter.getPageNumber() < totalPages) {
-                        filter.setPageNumber(filter.getPageNumber() + 1);
-                    } else {
-                        out.println(AnsiColor.warning("Вы находитесь на последней странице."));
-                    }
-                    break;
-                case "P":
-                    if (filter.getPageNumber() > 1) {
-                        filter.setPageNumber(filter.getPageNumber() - 1);
-                    } else {
-                        out.println(AnsiColor.warning("Вы находитесь на первой странице."));
-                    }
-                    break;
-                case "F":
-                    configureFilters(filter);
-                    break;
-                case "C":
+            switch (in.readCommand("Введите команду: ").toUpperCase()) {
+                case "N" -> nextPage(filter, totalPages);
+                case "P" -> previousPage(filter);
+                case "F" -> configureFilters(filter);
+                case "C" -> {
                     filter = new VacancyFilterDto();
-                    out.println(AnsiColor.info("Фильтры сброшены."));
-                    break;
-                case "D":
-                    handleViewVacancyDetails();
-                    break;
-                case "O":
-                    handleApplyForVacancy();
-                    break;
-                case "B":
-                    browsing = false;
-                    break;
-                default:
-                    out.println(AnsiColor.error("Неизвестная команда! Используйте N, P, F, C, D, O или B."));
-                    break;
+                    info("Фильтры сброшены.");
+                }
+                case "D" -> safely(this::handleViewVacancyDetails);
+                case "O" -> safely(this::handleApplyForVacancy);
+                case "B" -> {
+                    return;
+                }
+                default -> err("Неизвестная команда! Используйте N, P, F, C, D, O или B.");
             }
+        }
+    }
+
+    private void nextPage(VacancyFilterDto filter, int totalPages) {
+        if (filter.getPageNumber() < totalPages) {
+            filter.setPageNumber(filter.getPageNumber() + 1);
+        } else {
+            warn("Вы находитесь на последней странице.");
+        }
+    }
+
+    private void previousPage(VacancyFilterDto filter) {
+        if (filter.getPageNumber() > 1) {
+            filter.setPageNumber(filter.getPageNumber() - 1);
+        } else {
+            warn("Вы находитесь на первой странице.");
         }
     }
 
     private void printActiveFilters(VacancyFilterDto filter) {
-        StringBuilder sb = new StringBuilder("Активные фильтры: ");
+        StringBuilder text = new StringBuilder("Активные фильтры: ");
         boolean hasAny = false;
         if (filter.hasKeyword()) {
-            sb.append("Ключевое слово: '").append(filter.getKeyword()).append("' | ");
+            text.append("Ключевое слово: '").append(filter.getKeyword()).append("' | ");
             hasAny = true;
         }
         if (filter.hasSalaryMin()) {
-            sb.append("Зарплата от: ").append(filter.getSalaryMin()).append(" | ");
+            text.append("Зарплата от: ").append(filter.getSalaryMin()).append(" | ");
             hasAny = true;
         }
         if (filter.hasSourceFilter()) {
-            sb.append("Источник: ").append(filter.getSource()).append(" | ");
+            text.append("Источник: ").append(filter.getSource()).append(" | ");
             hasAny = true;
         }
-        if (!hasAny) {
-            sb.append("нет (все вакансии)");
-        }
-        out.println(AnsiColor.colorize(sb.toString(), AnsiColor.GRAY));
+        out.println(AnsiColor.colorize(hasAny ? text.toString() : text + "нет (все вакансии)", AnsiColor.GRAY));
     }
 
     private void configureFilters(VacancyFilterDto filter) {
         out.println("\n" + AnsiColor.colorize("--- Настройка фильтрации вакансий ---", AnsiColor.BOLD));
-        String kw = inputValidator.readOptionalString("Поиск по стеку / должности (оставьте пустым для пропуска): ", null);
-        Integer minSal = inputValidator.readOptionalInt("Минимальная зарплата (или Enter для пропуска): ", null);
+        String keyword = in.readOptionalString("Поиск по стеку / должности (Enter — пропустить): ", null);
+        Integer minSalary = in.readOptionalInt("Минимальная зарплата (Enter — пропустить): ", null);
 
-        out.println("Выберите источник:");
-        out.println("  1. Все источники (ALL)");
-        out.println("  2. Сайты (WEBSITE)");
-        out.println("  3. Telegram (TELEGRAM)");
-        out.println("  4. Работодатели вручную (MANUAL)");
-        int srcChoice = inputValidator.readIntInRange("Выбор [1-4]: ", 1, 4);
-        VacancySource source;
-        switch (srcChoice) {
-            case 2:
-                source = VacancySource.WEBSITE;
-                break;
-            case 3:
-                source = VacancySource.TELEGRAM;
-                break;
-            case 4:
-                source = VacancySource.MANUAL;
-                break;
-            default:
-                source = VacancySource.ALL;
-                break;
-        }
+        out.println("Выберите источник: 1. Все  2. Сайты  3. Telegram  4. Работодатели");
+        VacancySource source = switch (in.readIntInRange("Выбор [1-4]: ", 1, 4)) {
+            case 2 -> VacancySource.WEBSITE;
+            case 3 -> VacancySource.TELEGRAM;
+            case 4 -> VacancySource.MANUAL;
+            default -> VacancySource.ALL;
+        };
 
-        filter.setKeyword(kw);
-        filter.setSalaryMin(minSal);
+        filter.setKeyword(keyword);
+        filter.setSalaryMin(minSalary);
         filter.setSource(source);
-        filter.setPageNumber(1); // Reset to first page
-        out.println(AnsiColor.success("Фильтры успешно применены!"));
+        filter.setPageNumber(1);
+        ok("Фильтры успешно применены!");
     }
 
     private void handleViewVacancyDetails() {
-        Integer id = inputValidator.readOptionalInt("Введите ID вакансии для просмотра деталей: ", null);
-        if (id == null) return;
+        Integer id = in.readOptionalInt("Введите ID вакансии для просмотра деталей: ", null);
+        if (id == null) {
+            warn("ID вакансии не указан.");
+            return;
+        }
 
-        try {
-            VacancyDetailsDto d = candidateService.getVacancyDetails(Long.valueOf(id));
-            out.println("\n" + AnsiColor.colorize("==================================================================", AnsiColor.CYAN));
-            out.println(AnsiColor.colorize("  КАРТОЧКА ВАКАНСИИ #" + d.getId() + ": " + d.getTitle(), AnsiColor.BOLD + AnsiColor.CYAN));
-            out.println(AnsiColor.colorize("==================================================================", AnsiColor.CYAN));
-            out.println("Компания:       " + d.getCompanyName());
-            out.println("Зарплата:       " + AnsiColor.colorize(d.getSalaryFormatted(), AnsiColor.GREEN));
-            out.println("Локация:        " + (d.getLocation() != null ? d.getLocation() : "Не указана"));
-            out.println("Формат работы:  " + (d.getEmploymentType() != null ? d.getEmploymentType() : "Не указан"));
-            out.println("Источник:       " + d.getSourceFormatted() + (d.getSourceUrl() != null ? " (" + d.getSourceUrl() + ")" : ""));
-            out.println("Дата публикации:" + d.getPublishedDateFormatted());
-            out.println(AnsiColor.colorize("------------------------------------------------------------------", AnsiColor.GRAY));
-            out.println(AnsiColor.colorize("Требуемый стек технологий:", AnsiColor.BOLD));
-            out.println(d.getRequirementsStack() != null ? d.getRequirementsStack() : "Не указан");
-            out.println(AnsiColor.colorize("------------------------------------------------------------------", AnsiColor.GRAY));
-            out.println(AnsiColor.colorize("Описание вакансии:", AnsiColor.BOLD));
-            out.println(d.getDescription() != null ? d.getDescription() : "Описание отсутствует");
-            out.println(AnsiColor.colorize("==================================================================", AnsiColor.CYAN));
+        VacancyDetailsDto d = candidateService.getVacancyDetails((long) id);
+        header("КАРТОЧКА ВАКАНСИИ #" + d.getId() + ": " + d.getTitle());
+        out.println("Компания:        " + d.getCompanyName());
+        out.println("Зарплата:        " + AnsiColor.colorize(d.getSalaryFormatted(), AnsiColor.GREEN));
+        out.println("Локация:         " + orDash(d.getLocation()));
+        out.println("Формат работы:   " + (d.getEmploymentType() != null ? d.getEmploymentType() : "Не указан"));
+        out.println("Источник:        " + d.getSourceFormatted()
+                + (d.getSourceUrl() != null ? " (" + d.getSourceUrl() + ")" : ""));
+        out.println("Дата публикации: " + d.getPublishedDateFormatted());
+        out.println(AnsiColor.colorize(LINE, AnsiColor.GRAY));
+        out.println(AnsiColor.colorize("Требуемый стек технологий:", AnsiColor.BOLD));
+        out.println(orDash(d.getRequirementsStack()));
+        out.println(AnsiColor.colorize(LINE, AnsiColor.GRAY));
+        out.println(AnsiColor.colorize("Описание вакансии:", AnsiColor.BOLD));
+        out.println(orDash(d.getDescription()));
+        out.println(AnsiColor.colorize(DOUBLE_LINE, AnsiColor.CYAN));
 
-            if (sessionContext.isCandidate()) {
-                boolean applyNow = inputValidator.readConfirmation("Желаете откликнуться на эту вакансию?", true);
-                if (applyNow) {
-                    processApplicationSubmission(d.getId());
-                }
-            }
-        } catch (EntityNotFoundException | ValidationException e) {
-            out.println(AnsiColor.error(e.getMessage()));
+        if (sessionContext.isCandidate() && in.readConfirmation("Желаете откликнуться на эту вакансию?", true)) {
+            processApplicationSubmission(d.getId());
         }
     }
 
     private void handleApplyForVacancy() {
         if (!sessionContext.isCandidate()) {
-            out.println(AnsiColor.error("Для подачи отклика необходимо авторизоваться как Соискатель."));
+            err("Для подачи отклика необходимо авторизоваться как Соискатель.");
             return;
         }
-
-        Integer id = inputValidator.readOptionalInt("Введите ID вакансии для отклика: ", null);
-        if (id == null) return;
-        processApplicationSubmission(Long.valueOf(id));
+        Integer id = in.readOptionalInt("Введите ID вакансии для отклика: ", null);
+        if (id == null) {
+            warn("ID вакансии не указан.");
+            return;
+        }
+        processApplicationSubmission((long) id);
     }
 
     private void processApplicationSubmission(Long vacancyId) {
         out.println("\n" + AnsiColor.colorize("--- Подача отклика на вакансию #" + vacancyId + " ---", AnsiColor.BOLD));
-        boolean useProfile = inputValidator.readConfirmation("Использовать стандартное резюме и текст из вашего профиля?", true);
-        String coverLetter = null;
+        boolean useProfile = in.readConfirmation(
+                "Отправить отклик со стандартным резюме из профиля? (нет — ввести письмо вручную)", true);
+        String coverLetter = useProfile ? null : in.readRequiredString("Введите сопроводительное письмо: ");
 
-        if (!useProfile) {
-            coverLetter = inputValidator.readNonEmptyString("Введите сопроводительное письмо: ");
-        }
-
-        ApplyVacancyDto dto = new ApplyVacancyDto(vacancyId, coverLetter, useProfile);
-        try {
-            ApplicationDto result = candidateService.applyForVacancy(sessionContext.getCurrentUserId(), dto);
-            out.println(AnsiColor.success(String.format("Отклик #%d успешно отправлен со статусом %s!",
-                    result.getId(), AnsiColor.colorizeStatus(result.getStatus()))));
-        } catch (DuplicateApplicationException e) {
-            out.println(AnsiColor.warning("Блокировка повторной подачи: " + e.getMessage()));
-        } catch (EntityNotFoundException | ValidationException | AccessDeniedException e) {
-            out.println(AnsiColor.error("Ошибка при подаче отклика: " + e.getMessage()));
-        }
+        ApplicationDto result = candidateService.applyForVacancy(
+                sessionContext.getCurrentUserId(), new ApplyVacancyDto(vacancyId, coverLetter, useProfile));
+        ok(String.format("Отклик #%d успешно отправлен со статусом %s!",
+                result.getId(), AnsiColor.colorizeStatus(result.getStatus())));
     }
 
     public void showMyApplications() {
         if (!sessionContext.isCandidate()) {
-            out.println(AnsiColor.error("Доступно только авторизованному соискателю."));
+            err("Доступно только авторизованному соискателю.");
             return;
         }
 
-        boolean viewing = true;
-        while (viewing) {
+        while (true) {
             List<ApplicationDto> list = candidateService.getMyApplications(sessionContext.getCurrentUserId());
-
-            out.println("\n" + AnsiColor.colorize("--- РЕЕСТР: МОИ ОТКЛИКИ И ТРЕКЕР ЗАЯВОК ---", AnsiColor.BOLD));
+            header("РЕЕСТР: МОИ ОТКЛИКИ И ТРЕКЕР ЗАЯВОК");
             ConsoleTableFormatter table = new ConsoleTableFormatter(
-                    "ID Заявки", "Должность", "Компания", "Дата подачи", "Текущий статус"
-            );
-
+                    "ID Заявки", "Должность", "Компания", "Дата подачи", "Текущий статус");
             for (ApplicationDto a : list) {
-                table.addRow(
-                        String.valueOf(a.getId()),
-                        a.getVacancyTitle(),
-                        a.getCompanyName(),
-                        a.getAppliedAtFormatted(),
-                        AnsiColor.colorizeStatus(a.getStatus())
-                );
+                table.addRow(String.valueOf(a.getId()), a.getVacancyTitle(), a.getCompanyName(),
+                        a.getAppliedAtFormatted(), AnsiColor.colorizeStatus(a.getStatus()));
             }
             out.println(table.render());
-
-            out.println(AnsiColor.colorize("----------------------------------------------------------------------", AnsiColor.GRAY));
+            out.println(AnsiColor.colorize(LINE, AnsiColor.GRAY));
             out.println("Команды: [D] Детали отклика | [W] Отозвать отклик | [B] Назад в меню");
 
-            String cmd = inputValidator.readCommand("Введите команду: ").toUpperCase();
-            switch (cmd) {
-                case "D":
-                    handleViewApplicationDetails();
-                    break;
-                case "W":
-                    handleWithdrawApplication();
-                    break;
-                case "B":
-                    viewing = false;
-                    break;
-                default:
-                    out.println(AnsiColor.error("Неизвестная команда! Используйте D, W или B."));
-                    break;
+            switch (in.readCommand("Введите команду: ").toUpperCase()) {
+                case "D" -> safely(this::handleViewApplicationDetails);
+                case "W" -> safely(this::handleWithdrawApplication);
+                case "B" -> {
+                    return;
+                }
+                default -> err("Неизвестная команда! Используйте D, W или B.");
             }
         }
     }
 
     private void handleViewApplicationDetails() {
-        Integer appId = inputValidator.readOptionalInt("Введите ID отклика для просмотра: ", null);
-        if (appId == null) return;
-
-        try {
-            ApplicationDto a = candidateService.getApplicationDetails(sessionContext.getCurrentUserId(), Long.valueOf(appId));
-            out.println("\n" + AnsiColor.colorize("==================================================================", AnsiColor.CYAN));
-            out.println(AnsiColor.colorize("  ДЕТАЛИ ОТКЛИКА #" + a.getId() + " НА ВАКАНСИЮ: " + a.getVacancyTitle(), AnsiColor.BOLD + AnsiColor.CYAN));
-            out.println(AnsiColor.colorize("==================================================================", AnsiColor.CYAN));
-            out.println("Компания:          " + a.getCompanyName());
-            out.println("Статус отклика:    " + AnsiColor.colorizeStatus(a.getStatus()));
-            out.println("Дата подачи:       " + a.getAppliedAtFormatted());
-            out.println("Дата обновления:   " + a.getUpdatedAtFormatted());
-            if (a.getStatusComment() != null && !a.getStatusComment().isEmpty()) {
-                out.println("Комментарий HR:    " + AnsiColor.colorize(a.getStatusComment(), AnsiColor.YELLOW));
-            }
-            out.println(AnsiColor.colorize("------------------------------------------------------------------", AnsiColor.GRAY));
-            out.println(AnsiColor.colorize("Отправленное сопроводительное письмо:", AnsiColor.BOLD));
-            out.println(a.getCoverLetter() != null ? a.getCoverLetter() : "(пусто)");
-            out.println(AnsiColor.colorize("==================================================================", AnsiColor.CYAN));
-        } catch (EntityNotFoundException | AccessDeniedException | ValidationException e) {
-            out.println(AnsiColor.error(e.getMessage()));
-        }
-    }
-
-    private void handleWithdrawApplication() {
-        Integer appId = inputValidator.readOptionalInt("Введите ID отклика, который хотите отозвать: ", null);
-        if (appId == null) return;
-
-        boolean confirm = inputValidator.readConfirmation("Вы уверены, что хотите отозвать заявку #" + appId + "?", false);
-        if (!confirm) {
-            out.println("Операция отзыва отменена.");
+        Integer appId = in.readOptionalInt("Введите ID отклика для просмотра: ", null);
+        if (appId == null) {
+            warn("ID отклика не указан.");
             return;
         }
 
-        try {
-            ApplicationDto updated = candidateService.withdrawApplication(sessionContext.getCurrentUserId(), Long.valueOf(appId));
-            out.println(AnsiColor.success(String.format("Отклик #%d успешно отозван! Текущий статус: %s",
-                    updated.getId(), AnsiColor.colorizeStatus(updated.getStatus()))));
-        } catch (InvalidStateTransitionException e) {
-            out.println(AnsiColor.warning(e.getMessage()));
-        } catch (EntityNotFoundException | AccessDeniedException | ValidationException e) {
-            out.println(AnsiColor.error(e.getMessage()));
+        ApplicationDto a = candidateService.getApplicationDetails(sessionContext.getCurrentUserId(), (long) appId);
+        header("ДЕТАЛИ ОТКЛИКА #" + a.getId() + " НА ВАКАНСИЮ: " + a.getVacancyTitle());
+        out.println("Компания:        " + a.getCompanyName());
+        out.println("Статус отклика:  " + AnsiColor.colorizeStatus(a.getStatus()));
+        out.println("Дата подачи:     " + a.getAppliedAtFormatted());
+        out.println("Дата обновления: " + a.getUpdatedAtFormatted());
+        if (a.getStatusComment() != null && !a.getStatusComment().isEmpty()) {
+            out.println("Комментарий HR:  " + AnsiColor.colorize(a.getStatusComment(), AnsiColor.YELLOW));
         }
+        out.println(AnsiColor.colorize(LINE, AnsiColor.GRAY));
+        out.println(AnsiColor.colorize("Отправленное сопроводительное письмо:", AnsiColor.BOLD));
+        out.println(a.getCoverLetter() != null ? a.getCoverLetter() : "(пусто)");
+        out.println(AnsiColor.colorize(DOUBLE_LINE, AnsiColor.CYAN));
+    }
+
+    private void handleWithdrawApplication() {
+        Integer appId = in.readOptionalInt("Введите ID отклика, который хотите отозвать: ", null);
+        if (appId == null) {
+            warn("ID отклика не указан.");
+            return;
+        }
+        if (!in.readConfirmation("Вы уверены, что хотите отозвать заявку #" + appId + "?", false)) {
+            out.println("Операция отзыва отменена.");
+            return;
+        }
+        ApplicationDto updated = candidateService.withdrawApplication(sessionContext.getCurrentUserId(), (long) appId);
+        ok(String.format("Отклик #%d успешно отозван! Текущий статус: %s",
+                updated.getId(), AnsiColor.colorizeStatus(updated.getStatus())));
     }
 
     public void showCandidateProfile() {
         if (!sessionContext.isCandidate()) {
-            out.println(AnsiColor.error("Доступно только авторизованному соискателю."));
+            err("Доступно только авторизованному соискателю.");
             return;
         }
 
         CandidateProfileEntity p = candidateService.getProfile(sessionContext.getCurrentUserId());
+        header("ПРОФИЛЬ СОИСКАТЕЛЯ", AnsiColor.MAGENTA);
+        out.println("ФИО:                " + p.getFullName());
+        out.println("Желаемая должность: " + orDash(p.getTargetTitle()));
+        out.println("Стек и навыки:      " + orDash(p.getSkills()));
+        out.println("Телефон:            " + orDash(p.getPhone()));
+        out.println("Telegram:           " + orDash(p.getTelegram()));
+        out.println("Портфолио / GitHub: " + orDash(p.getPortfolioLinks()));
+        out.println(AnsiColor.colorize(DOUBLE_LINE, AnsiColor.MAGENTA));
 
-        out.println("\n" + AnsiColor.colorize("==================================================================", AnsiColor.MAGENTA));
-        out.println(AnsiColor.colorize("                      ПРОФИЛЬ СОИСКАТЕЛЯ                         ", AnsiColor.BOLD + AnsiColor.MAGENTA));
-        out.println(AnsiColor.colorize("==================================================================", AnsiColor.MAGENTA));
-        out.println("ФИО:               " + p.getFullName());
-        out.println("Желаемая должность:" + (p.getTargetTitle() != null ? p.getTargetTitle() : "Не указана"));
-        out.println("Стек и навыки:     " + (p.getSkills() != null ? p.getSkills() : "Не указаны"));
-        out.println("Телефон:           " + (p.getPhone() != null ? p.getPhone() : "Не указан"));
-        out.println("Telegram:          " + (p.getTelegram() != null ? p.getTelegram() : "Не указан"));
-        out.println("Портфолио / GitHub:" + (p.getPortfolioLinks() != null ? p.getPortfolioLinks() : "Не указано"));
-        out.println(AnsiColor.colorize("==================================================================", AnsiColor.MAGENTA));
-
-        boolean edit = inputValidator.readConfirmation("Желаете обновить данные профиля?", false);
-        if (edit) {
+        if (in.readConfirmation("Желаете обновить данные профиля?", false)) {
             handleEditProfile(p);
         }
     }
 
     private void handleEditProfile(CandidateProfileEntity current) {
-        out.println("\n" + AnsiColor.colorize("--- Редактирование профиля (Enter - оставить текущее) ---", AnsiColor.BOLD));
-        String name = inputValidator.readOptionalString("ФИО [" + current.getFullName() + "]: ", current.getFullName());
-        String title = inputValidator.readOptionalString("Желаемая должность [" + (current.getTargetTitle() != null ? current.getTargetTitle() : "") + "]: ", current.getTargetTitle());
-        String skills = inputValidator.readOptionalString("Стек и навыки [" + (current.getSkills() != null ? current.getSkills() : "") + "]: ", current.getSkills());
-        String phone = inputValidator.readOptionalString("Телефон [" + (current.getPhone() != null ? current.getPhone() : "") + "]: ", current.getPhone());
-        String telegram = inputValidator.readOptionalString("Telegram [" + (current.getTelegram() != null ? current.getTelegram() : "") + "]: ", current.getTelegram());
-        String portfolio = inputValidator.readOptionalString("Портфолио [" + (current.getPortfolioLinks() != null ? current.getPortfolioLinks() : "") + "]: ", current.getPortfolioLinks());
+        out.println("\n" + AnsiColor.colorize("--- Редактирование профиля (Enter — оставить текущее) ---", AnsiColor.BOLD));
+        CandidateProfileUpdateDto dto = new CandidateProfileUpdateDto(
+                in.readOptionalString("ФИО [" + current.getFullName() + "]: ", current.getFullName()),
+                in.readOptionalString("Желаемая должность [" + orEmpty(current.getTargetTitle()) + "]: ", current.getTargetTitle()),
+                in.readOptionalString("Стек и навыки [" + orEmpty(current.getSkills()) + "]: ", current.getSkills()),
+                in.readOptionalPhone("Телефон [" + orEmpty(current.getPhone()) + "]: ", current.getPhone()),
+                in.readOptionalTelegram("Telegram [" + orEmpty(current.getTelegram()) + "]: ", current.getTelegram()),
+                in.readOptionalUrl("Портфолио [" + orEmpty(current.getPortfolioLinks()) + "]: ", current.getPortfolioLinks())
+        );
+        sessionContext.updateCandidateProfile(
+                candidateService.updateProfile(sessionContext.getCurrentUserId(), dto));
+        ok("Профиль успешно обновлен!");
+    }
 
-        CandidateProfileUpdateDto dto = new CandidateProfileUpdateDto(name, title, skills, phone, telegram, portfolio);
-        CandidateProfileEntity updated = candidateService.updateProfile(sessionContext.getCurrentUserId(), dto);
-        sessionContext.updateCandidateProfile(updated);
-        out.println(AnsiColor.success("Профиль успешно обновлен!"));
+    private static String orDash(String value) {
+        return value == null || value.isBlank() ? "Не указано" : value;
+    }
+
+    private static String orEmpty(String value) {
+        return value == null ? "" : value;
     }
 }

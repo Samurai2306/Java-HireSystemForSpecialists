@@ -1,6 +1,8 @@
 spring:
   application:
     name: hr-system
+  config:
+    import: optional:file:.env[.properties]
   main:
     banner-mode: console
   datasource:
@@ -13,6 +15,10 @@ spring:
       ddl-auto: update
     open-in-view: false
     show-sql: false
+    properties:
+      hibernate:
+        show_sql: false
+        format_sql: false
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -31,4 +37,9 @@ logging:
   level:
     root: WARN
     com.hrsystem: INFO
-    org.flywaydb: INFO
+    org.flywaydb: WARN
+    org.hibernate: WARN
+    org.hibernate.SQL: OFF
+    org.hibernate.orm.jdbc.bind: OFF
+    org.hibernate.orm.jdbc.extract: OFF
+    com.zaxxer.hikari: WARN
