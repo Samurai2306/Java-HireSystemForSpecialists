@@ -7,6 +7,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -53,5 +54,22 @@ class ApplicationStateMachineTest {
         assertFalse(machine.canTransition(null, ApplicationStatus.REVIEWING));
         assertThrows(InvalidStateTransitionException.class,
                 () -> machine.validate(ApplicationStatus.APPLIED, null));
+    }
+
+    @Test
+    void everyPairMatchesTheOriginalMatrix() {
+        for (ApplicationStatus from : ApplicationStatus.values()) {
+            for (ApplicationStatus to : ApplicationStatus.values()) {
+                boolean allowed = (from == ApplicationStatus.APPLIED
+                        && (to == ApplicationStatus.REVIEWING
+                        || to == ApplicationStatus.REJECTED
+                        || to == ApplicationStatus.WITHDRAWN))
+                        || (from == ApplicationStatus.REVIEWING
+                        && (to == ApplicationStatus.OFFER
+                        || to == ApplicationStatus.REJECTED
+                        || to == ApplicationStatus.WITHDRAWN));
+                assertEquals(allowed, machine.canTransition(from, to), from + " → " + to);
+            }
+        }
     }
 }

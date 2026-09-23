@@ -19,13 +19,16 @@ import com.hrsystem.repository.VacancyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Collection;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -131,10 +134,31 @@ class ApplicationServiceImplTest {
     void duplicateActiveApplicationIsBlocked() {
         when(candidateProfileRepository.findById(5L)).thenReturn(Optional.of(candidate));
         when(vacancyRepository.findById(100L)).thenReturn(Optional.of(vacancy));
+        ArgumentCaptor<Collection<ApplicationStatus>> statuses = ArgumentCaptor.forClass(Collection.class);
         when(applicationRepository.existsByVacancyIdAndCandidateIdAndStatusIn(
-                eq(100L), eq(5L), any()))
+                eq(100L), eq(5L), statuses.capture()))
                 .thenReturn(true);
 
         assertThrows(DuplicateApplicationException.class, () -> service.apply(5L, 100L, "hi"));
+        assertTrue(statuses.getValue().contains(ApplicationStatus.APPLIED));
+        assertTrue(statuses.getValue().contains(ApplicationStatus.REVIEWING));
+        assertEquals(2, statuses.getValue().size());
+    }
+
+    @Test
+    void adminCannotChangeApplicationStatus() {
+        when(applicationRepository.findWithDetailsById(501L)).thenReturn(Optional.of(application));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.changeStatus(501L, ApplicationStatus.REVIEWING, null, 1L, UserRole.ADMIN));
+    }
+
+    @Test
+    void employerCannotWithdrawSomeoneElsesChoice() {
+        when(applicationRepository.findWithDetailsById(501L)).thenReturn(Optional.of(application));
+        when(employerProfileRepository.findByUserId(20L)).thenReturn(Optional.of(employer));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.changeStatus(501L, ApplicationStatus.WITHDRAWN, null, 20L, UserRole.EMPLOYER));
     }
 }
