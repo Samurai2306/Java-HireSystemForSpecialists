@@ -226,9 +226,11 @@ public class SeedDataInitializer implements ApplicationRunner {
         parsingSourceRepository.save(hh);
 
         ParsingSourceEntity tg = new ParsingSourceEntity();
-        tg.setName("Telegram Java Jobs");
+        tg.setName("Telegram Java Jobs RU");
         tg.setSourceType(VacancySource.TELEGRAM);
-        tg.setBaseUrl("https://t.me/s/javajobs");
+        // ВАЖНО: у канала должно быть публичное веб-превью (t.me/s/<канал>), иначе Telegram
+        // отдаёт редирект и страницу-заглушку, и парсер найдёт 0 карточек.
+        tg.setBaseUrl("https://t.me/s/java_jobs_ru");
         tg.setActive(true);
         parsingSourceRepository.save(tg);
     }

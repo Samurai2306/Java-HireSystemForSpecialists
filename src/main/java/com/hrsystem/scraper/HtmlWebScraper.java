@@ -19,11 +19,11 @@ import java.util.Map;
 @Component
 public class HtmlWebScraper {
 
-    private final HttpFetcher httpFetcher;
+    private final HtmlFetcher httpFetcher;
     private final TextCleaner textCleaner;
     private final ScraperProperties properties;
 
-    public HtmlWebScraper(HttpFetcher httpFetcher, TextCleaner textCleaner, ScraperProperties properties) {
+    public HtmlWebScraper(HtmlFetcher httpFetcher, TextCleaner textCleaner, ScraperProperties properties) {
         this.httpFetcher = httpFetcher;
         this.textCleaner = textCleaner;
         this.properties = properties;

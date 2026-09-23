@@ -166,7 +166,9 @@ public class ScraperCoordinatorService {
         if (raw.getSourceUrl() != null && vacancyRepository.existsBySourceUrl(raw.getSourceUrl())) {
             return false;
         }
-        SalaryParser.ParsedSalary salary = salaryParser.parse(raw.getSalaryRaw() == null ? description : raw.getSalaryRaw());
+        // Зарплату берём только из выделенного поля (CSS-селектор на сайте, маркер 💰 в Telegram).
+        // Парсить её из всего описания нельзя: «опыт от 2-х лет» превращалось в зарплату «2 ₽».
+        SalaryParser.ParsedSalary salary = salaryParser.parse(raw.getSalaryRaw());
         VacancyEntity vacancy = new VacancyEntity();
         vacancy.setTitle(truncate(title, 255));
         vacancy.setCompanyName(truncate(company.isBlank() ? "Не указано" : company, 255));

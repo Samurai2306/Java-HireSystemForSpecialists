@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.net.SocketTimeoutException;
 
 @Component
-public class HttpFetcher {
+public class HttpFetcher implements HtmlFetcher {
 
     private final ScraperProperties properties;
 
@@ -18,6 +18,7 @@ public class HttpFetcher {
         this.properties = properties;
     }
 
+    @Override
     public Document fetch(String url) throws IOException {
         IOException last = null;
         int retries = Math.max(1, properties.getMaxRetries());
@@ -51,6 +52,7 @@ public class HttpFetcher {
         throw last == null ? new IOException("Не удалось загрузить " + url) : last;
     }
 
+    @Override
     public void pause() {
         try {
             Thread.sleep(properties.getRequestDelayMs());
