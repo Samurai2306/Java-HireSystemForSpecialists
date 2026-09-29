@@ -21,10 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
-/**
- * Наполняет базу демо-данными. Запускается раньше CLI (@Order(10) против @Order(100) у CliRunner),
- * иначе каталог и демо-учётки были бы пустыми при первом запуске.
- */
+
 @Component
 @Order(10)
 public class SeedDataInitializer implements ApplicationRunner {
@@ -98,7 +95,7 @@ public class SeedDataInitializer implements ApplicationRunner {
         employerProfile.setDescription("Ведущая IT-компания России.");
         employerProfileRepository.save(employerProfile);
 
-        // Gleb's demo accounts (.local)
+
         UserEntity glebAdmin = new UserEntity("admin@hrsystem.local", passwordEncoder.encode("admin123"), UserRole.ADMIN);
         userRepository.save(glebAdmin);
 

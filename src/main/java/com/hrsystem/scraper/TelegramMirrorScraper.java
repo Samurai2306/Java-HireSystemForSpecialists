@@ -15,14 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-/**
- * Парсер публичного веб-превью Telegram-канала (t.me/s/&lt;канал&gt;).
- *
- * Важно: превью отдаётся только для существующего публичного канала. Для мёртвого канала
- * Telegram делает редирект на t.me/&lt;канал&gt; и возвращает заглушку с кодом 200 — поэтому
- * страница обязательно проверяется ({@link #verifyPublicPreview}), иначе парсер молча
- * возвращал бы 0 карточек и в отчёте было бы «ошибок: 0».
- */
+
 @Component
 public class TelegramMirrorScraper {
 
@@ -141,7 +134,7 @@ public class TelegramMirrorScraper {
         return stack == null ? body : stack;
     }
 
-    /** Значение поля: текст от маркера до ближайшего следующего маркера. */
+   
     private String extractField(String body, String marker) {
         int start = body.indexOf(marker);
         if (start < 0) {
@@ -177,8 +170,7 @@ public class TelegramMirrorScraper {
         return body.lines().filter(line -> !line.isBlank()).findFirst().orElse(body);
     }
 
-    /** Ссылка на пост в канале. Берём data-post («канал/номер»), а не первую ссылку из текста:
-     *  в постах-дайджестах внешние ссылки (hh.ru и т.п.) идут раньше ссылки на сам пост. */
+    
     private String extractPostUrl(Element wrap) {
         Element message = wrap.hasAttr("data-post") ? wrap : wrap.selectFirst("[data-post]");
         if (message != null) {
@@ -197,7 +189,7 @@ public class TelegramMirrorScraper {
             try {
                 return Instant.parse(time.attr("datetime"));
             } catch (Exception ignored) {
-                // fallback below
+               
             }
         }
         return Instant.now();
