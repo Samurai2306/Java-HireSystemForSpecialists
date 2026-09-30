@@ -11,7 +11,7 @@ public class VacancyRepository implements CrudRepository<Vacancy, Long> {
 
     @Override
     public void create(Vacancy vacancy) throws SQLException {
-        String sql = "INSERT INTO vacancies (title, company_name, salary_min, salary_max, status, created_at, updated_at, is_parsed) VALUES (?, ?, ?, ?, ?, NOW(), NOW(), false)";
+        String sql = "INSERT INTO vacancies (title, company_name, salary_min, salary_max, status, employer_id, created_at, updated_at, is_parsed) VALUES (?, ?, ?, ?, ?, 2, NOW(), NOW(), false)";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setString(1, vacancy.getTitle());
