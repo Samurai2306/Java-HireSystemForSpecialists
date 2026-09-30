@@ -1,8 +1,7 @@
-package com.hrsystem.domain.enums;
+package com.hrsystem.model;
 
 public enum VacancyStatus {
     ACTIVE,
     ARCHIVED,
-    MODERATION,
     REJECTED
 }

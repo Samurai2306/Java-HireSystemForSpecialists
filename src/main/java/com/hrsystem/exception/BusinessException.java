@@ -3,8 +3,8 @@ package com.hrsystem.exception;
 /**
  * Требование КР1: Собственные исключения.
  */
-public class EntityNotFoundException extends BusinessException {
-    public EntityNotFoundException(String message) {
+public class BusinessException extends RuntimeException {
+    public BusinessException(String message) {
         super(message);
     }
 }

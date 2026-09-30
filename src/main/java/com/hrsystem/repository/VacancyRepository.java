@@ -1,74 +1,91 @@
 package com.hrsystem.repository;
 
-import com.hrsystem.domain.entity.VacancyEntity;
-import com.hrsystem.domain.enums.VacancySource;
-import com.hrsystem.domain.enums.VacancyStatus;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
+import com.hrsystem.model.Vacancy;
+import com.hrsystem.util.DatabaseManager;
 
+import java.sql.*;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
-@Repository
-public interface VacancyRepository extends JpaRepository<VacancyEntity, Long> {
+public class VacancyRepository implements CrudRepository<Vacancy, Long> {
 
-    /**
-     * Каталог активных вакансий. Параметры-заглушки (ALL, 0, "") вместо null:
-     * Hibernate 6 не типизирует NULL-параметры в PostgreSQL и запрос падает с "lower(bytea) does not exist".
-     */
-    @Query("""
-            SELECT v FROM VacancyEntity v
-            WHERE v.status = :status
-              AND (:source = com.hrsystem.domain.enums.VacancySource.ALL OR v.sourceType = :source)
-              AND (:minSalary <= 0 OR v.salaryMax >= :minSalary OR (v.salaryMin IS NOT NULL AND v.salaryMin >= :minSalary))
-              AND (:keyword = '' OR LOWER(v.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(v.companyName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(v.requirementsStack) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(v.description) LIKE LOWER(CONCAT('%', :keyword, '%')))
-            """)
-    Page<VacancyEntity> findWithFilters(
-            @Param("status") VacancyStatus status,
-            @Param("source") VacancySource source,
-            @Param("minSalary") Integer minSalary,
-            @Param("keyword") String keyword,
-            Pageable pageable
-    );
+    @Override
+    public void create(Vacancy vacancy) throws SQLException {
+        String sql = "INSERT INTO vacancies (title, company_name, salary_min, salary_max, status, created_at, updated_at, is_parsed) VALUES (?, ?, ?, ?, ?, NOW(), NOW(), false)";
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, vacancy.getTitle());
+            stmt.setString(2, vacancy.getCompanyName());
+            stmt.setBigDecimal(3, vacancy.getSalaryMin());
+            stmt.setBigDecimal(4, vacancy.getSalaryMax());
+            stmt.setString(5, vacancy.getStatus().name());
+            stmt.executeUpdate();
+            
+            try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                if (generatedKeys.next()) {
+                    vacancy.setId(generatedKeys.getLong(1));
+                }
+            }
+        }
+    }
 
-    boolean existsByContentHash(String contentHash);
+    @Override
+    public List<Vacancy> findAll() throws SQLException {
+        List<Vacancy> list = new ArrayList<>();
+        String sql = "SELECT id, title, company_name, salary_min, salary_max, status FROM vacancies";
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                list.add(mapRow(rs));
+            }
+        }
+        return list;
+    }
 
-    boolean existsBySourceUrl(String sourceUrl);
+    @Override
+    public Vacancy findById(Long id) throws SQLException {
+        String sql = "SELECT id, title, company_name, salary_min, salary_max, status FROM vacancies WHERE id = ?";
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setLong(1, id);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapRow(rs);
+                }
+            }
+        }
+        return null;
+    }
 
-    List<VacancyEntity> findByEmployerIdOrderByPublishedAtDesc(Long employerId);
+    public void updateStatus(Long id, String newStatus) throws SQLException {
+        String sql = "UPDATE vacancies SET status = ?, updated_at = NOW() WHERE id = ?";
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, newStatus);
+            stmt.setLong(2, id);
+            stmt.executeUpdate();
+        }
+    }
 
-    @EntityGraph(attributePaths = "employer")
-    @Query("SELECT v FROM VacancyEntity v WHERE v.id = :id")
-    Optional<VacancyEntity> findWithEmployerById(@Param("id") Long id);
+    @Override
+    public void delete(Long id) throws SQLException {
+        String sql = "DELETE FROM vacancies WHERE id = ?";
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setLong(1, id);
+            stmt.executeUpdate();
+        }
+    }
 
-    long countByStatus(VacancyStatus status);
-
-    long countByStatusAndSourceType(VacancyStatus status, VacancySource sourceType);
-
-    List<VacancyEntity> findTop50ByOrderByPublishedAtDesc();
-
-    @Query("""
-            SELECT v FROM VacancyEntity v
-            WHERE v.status = com.hrsystem.domain.enums.VacancyStatus.ACTIVE
-              AND (:keyword = '' OR LOWER(v.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(v.companyName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(COALESCE(v.requirementsStack, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(v.description) LIKE LOWER(CONCAT('%', :keyword, '%')))
-              AND (:salaryMin <= 0 OR COALESCE(v.salaryMax, v.salaryMin) >= :salaryMin)
-              AND (:sourceType = com.hrsystem.domain.enums.VacancySource.ALL OR v.sourceType = :sourceType)
-            """)
-    Page<VacancyEntity> searchActive(
-            @Param("keyword") String keyword,
-            @Param("salaryMin") Integer salaryMin,
-            @Param("sourceType") VacancySource sourceType,
-            Pageable pageable
-    );
+    private Vacancy mapRow(ResultSet rs) throws SQLException {
+        return new Vacancy(
+                rs.getLong("id"),
+                rs.getString("title"),
+                rs.getString("company_name"),
+                rs.getBigDecimal("salary_min"),
+                rs.getBigDecimal("salary_max"),
+                rs.getString("status")
+        );
+    }
 }
