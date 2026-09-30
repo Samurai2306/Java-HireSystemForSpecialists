@@ -1,159 +1,193 @@
-# HR-System: Агрегатор вакансий и рекрутинговая платформа
+# HR System (Агрегатор вакансий) - Контрольная работа №1
 
-Комплексная информационная система агрегации IT-вакансий и взаимодействия соискателей, работодателей и администраторов с многоуровневым CLI-интерфейсом, парсерами внешних площадок, конечным автоматом статусов заявок и персистентностью в PostgreSQL/H2.
+Консольная информационная система управления вакансиями (HR System), разработанная на чистой Java (Pure Java) с использованием JDBC и PostgreSQL.
 
----
-
-## 1. Архитектура команды и распределение ролей
-
-Система объединяет модули всех участников команды:
-
-| Разработчик | Зона ответственности | Реализованные компоненты |
-|---|---|---|
-| **Дамир** | Личный кабинет соискателя, безопасность и аутентификация | `AuthService`, `CandidateService`, `CliSessionContext`, `CandidateCliView`, `AuthCliView`, DTO, ANSI-оформление, интеграционные тесты сквозного сценария |
-| **Глеб** | Личные кабинеты работодателя и администратора | `EmployerService`, `ModerationService`, `ApplicationService`, `ApplicationStateMachine`, `EmployerCliView`, `AdminCliView`, Flyway-миграции V1-V3, Docker Compose |
-| **Максим** | Движок парсинга вакансий (Scraper Engine) | `ScraperCoordinatorService`, `HhRuScraper` (Jsoup), `HtmlWebScraper`, `TelegramMirrorScraper`, `SalaryParser`, `TextCleaner`, `ContentHasher`, `ScraperProperties` |
-| **Эдик** | Реляционная схема данных и оптимизация БД | Индексация таблиц (V2), схема связей, оптимизация запросов JPA |
+Проект полностью соответствует требованиям к КР1:
+- Разделение на слои (UI, Service, Repository)
+- Использование ООП, интерфейсов, полиморфизма
+- Работа с базой данных через JDBC (`PreparedStatement`, `Connection`, `ResultSet`)
+- Управление зависимостями вручную (без Spring)
+- Использование Java Collections Framework и Stream API
+- Консольное меню на основе `switch` выражений
+- Безопасная обработка исключений (система не падает при ошибках ввода)
 
 ---
 
-## 2. Реализованный функционал
+## 🏛 Архитектура проекта
 
-### 2.1. Аутентификация, безопасность и сессия (Дамир)
-- **BCrypt-хэширование:** Все пароли защищены алгоритмом BCrypt (10 раундов соли).
-- **Единый контекст сессии (`CliSessionContext`):** Хранит состояние аутентифицированного пользователя (`UserEntity`), привязанный профиль (`CandidateProfileEntity` или `EmployerProfileEntity`) и роль (`CANDIDATE`, `EMPLOYER`, `ADMIN`).
-- **Интерактивный CLI-вход:** Меню аутентификации с регистрацией ролей, входом и безопасным выходом.
+Проект построен по классической многослойной архитектуре.
 
-### 2.2. Каталог и поиск вакансий (Дамир)
-- **Фильтрация и пагинация:** Поиск по ключевым словам, минимальной зарплате, типу источника (`WEBSITE`, `TELEGRAM`, `MANUAL`). Постраничный просмотр (по 10 вакансий).
-- **Карточка вакансии:** Детальный просмотр требований, компании, условий, контактов и зарплатной вилки.
-- **Подача и отзыв откликов:** Защита от дубликатов (`DuplicateApplicationException`), генерация сопроводительного письма, отзыв заявки кандидатом (`WITHDRAWN`).
+```mermaid
+flowchart TD
+    UI[Console UI\n(Main.java)]
+    Service[Business Logic\n(VacancyService.java)]
+    Repo[Data Access\n(VacancyRepository.java)]
+    DB[(PostgreSQL)]
 
-### 2.3. Кабинет работодателя и отклики (Глеб)
-- **Управление вакансиями компании:** Публикация, редактирование, архивация, просмотр списка созданных вакансий с количеством откликов.
-- **Рекрутинг-воронка:** Просмотр откликов на вакансии работодателя, доступ к резюме кандидатов.
-- **Конечный автомат статусов заявок (`ApplicationStateMachine`):**
-  - `APPLIED` -> `REVIEWING` -> `OFFER` / `REJECTED`
-  - `APPLIED` / `REVIEWING` -> `WITHDRAWN` (отзыв кандидатом)
-  - Защита от недопустимых переходов с выбросом `InvalidStateTransitionException`.
-
-### 2.4. Кабинет администратора и модерация (Глеб)
-- **Дашборд статистики:** Общее число пользователей (соискатели/работодатели/админы), вакансий (активные, на модерации, архив, спарсенные), заявок, логов парсинга.
-- **Модерация вакансий:** Одобрение (`ACTIVE`) или отклонение (`REJECTED`) вакансий перед публикацией.
-- **Управление пользователями:** Блокировка/разблокировка учетных записей.
-- **Управление парсингом:** Ручной запуск парсеров, просмотр логов и отчетов сбора данных.
-
-### 2.5. Движок парсинга вакансий (Максим)
-- **Модульные парсеры:**
-  - `HhRuScraper` — парсер HTML-страниц каталога с селекторами Jsoup.
-  - `HtmlWebScraper` — универсальный скрапер веб-страниц.
-  - `TelegramMirrorScraper` — парсер публичных веб-зеркал Telegram-каналов с вакансиями.
-- **Нормализация и дедупликация:**
-  - `SalaryParser` — извлечение зарплатных вилок из неструктурированного текста (рубли, доллары, евро).
-  - `TextCleaner` — очистка HTML-тегов, спецсимволов и форматирование описаний.
-  - `ContentHasher` — SHA-256 хэширование вакансий для предотвращения дубликатов при регулярном парсинге.
+    UI -- Ввод/Вывод --> Service
+    Service -- Проверки & Бизнес-логика --> Repo
+    Repo -- SQL & JDBC --> DB
+```
 
 ---
 
-## 3. Стек технологий
+## 💾 Схема базы данных (ER Diagram)
 
-- **Язык программирования:** Java 17
-- **Фреймворк:** Spring Boot 3.3.5 (Data JPA, Validation, Security Crypto)
-- **Базы данных:** PostgreSQL 16 (production/docker), H2 (in-memory test & local)
-- **Миграции:** Flyway (V1 - схема, V2 - индексы, V3 - демо-данные, V4 - enum → varchar, V5 - рабочие Telegram-каналы)
-- **Парсинг:** Jsoup 1.18.1
-- **Контейнеризация:** Docker, Docker Compose
-- **Тестирование:** JUnit 5, Mockito, AssertJ (72 теста)
+База данных состоит из двух связанных сущностей: `users` (дополнительная сущность) и `vacancies` (основная сущность).
+
+```mermaid
+erDiagram
+    users {
+        int id PK
+        varchar email UK "NOT NULL"
+        varchar password_hash "NOT NULL"
+        varchar role "NOT NULL"
+        boolean is_active
+        timestamp created_at
+    }
+    
+    vacancies {
+        int id PK
+        int employer_id FK "NOT NULL"
+        varchar title "NOT NULL"
+        varchar company_name "NOT NULL"
+        decimal salary_min "CHECK (>= 0)"
+        decimal salary_max "CHECK (>= 0)"
+        varchar status "NOT NULL"
+        boolean is_parsed
+        varchar source_type
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    users ||--o{ vacancies : "создает (employer_id)"
+```
+
+**Ограничения на уровне БД:**
+- Каскадное удаление (ON DELETE CASCADE)
+- Проверка валидности зарплаты: `CHECK (salary_max >= salary_min)`
 
 ---
 
-## 4. Демо-пользователи для проверки и защиты
+## 🧩 Диаграмма классов (Class Diagram)
 
-В систему предзагружены демонстрационные учетные записи:
+```mermaid
+classDiagram
+    class Main {
+        -VacancyRepository repository$
+        -VacancyService service$
+        -Scanner scanner$
+        +main(String[] args)$
+        -printMenu()$
+        -addVacancy()$
+        -searchVacancy()$
+        -archiveVacancy()$
+    }
 
-| Роль | Email | Пароль | Описание |
-|---|---|---|---|
-| **Соискатель** | `damir@candidate.com` | `candidate123` | Профиль: Java Backend Developer |
-| **Соискатель (Глеб)** | `candidate@hrsystem.local` | `candidate123` | Профиль: Junior Developer |
-| **Работодатель** | `hr@yandex-team.ru` | `employer123` | Компания: Яндекс |
-| **Работодатель (Глеб)**| `employer@hrsystem.local` | `employer123` | Компания: TechCorp Solutions |
-| **Администратор** | `admin@hrsystem.com` | `admin123` | Полный доступ к модерации и дашборду |
-| **Администратор (Глеб)**| `admin@hrsystem.local` | `admin123` | Системный администратор |
+    class VacancyService {
+        -VacancyRepository repository
+        +VacancyService(VacancyRepository repo)
+        +addVacancy(String title, String company, BigDecimal min, BigDecimal max)
+        +printAllVacancies()
+        +searchByTitle(String keyword)
+        +archiveVacancy(Long id)
+        +printStatistics()
+        +exportToCsv()
+    }
+
+    class CrudRepository~T, ID~ {
+        <<interface>>
+        +save(T entity)
+        +findById(ID id) T
+        +findAll() List~T~
+        +update(T entity)
+        +deleteById(ID id)
+    }
+
+    class VacancyRepository {
+        +save(Vacancy vacancy)
+        +findById(Long id) Vacancy
+        +findAll() List~Vacancy~
+        +update(Vacancy vacancy)
+        +deleteById(Long id)
+    }
+
+    class Vacancy {
+        -Long id
+        -Long employerId
+        -String title
+        -String companyName
+        -BigDecimal salaryMin
+        -BigDecimal salaryMax
+        -VacancyStatus status
+        +printFormatted()
+    }
+
+    class VacancyStatus {
+        <<enumeration>>
+        ACTIVE
+        ARCHIVED
+        REJECTED
+    }
+
+    class BusinessException {
+        +BusinessException(String message)
+    }
+
+    class DatabaseManager {
+        -String URL$
+        -String USER$
+        -String PASS$
+        +getConnection()$ Connection
+    }
+
+    Main --> VacancyService : uses
+    VacancyService --> VacancyRepository : depends on
+    VacancyRepository ..|> CrudRepository : implements
+    VacancyRepository --> DatabaseManager : gets connection
+    VacancyRepository --> Vacancy : manages
+    Vacancy --> VacancyStatus : has state
+    VacancyService ..> BusinessException : throws
+```
 
 ---
 
-## 5. Инструкция по сборке и запуску
+## 📋 Пользовательские сценарии (User Story Map)
 
-### 5.1. Запуск unit и интеграционных тестов (72 теста)
-Тесты выполняются в изолированной in-memory H2 базе данных:
-```bash
-mvn test
+```mermaid
+journey
+    title Путь пользователя (Employer) в консольной системе
+    section Запуск и просмотр
+      Запуск приложения: 5: Main
+      Просмотр списка всех вакансий: 4: VacancyService, VacancyRepository
+    section Управление вакансиями
+      Ввод данных новой вакансии: 4: Main
+      Проверка бизнес-правил: 5: VacancyService
+      Сохранение в БД: 5: VacancyRepository
+    section Поиск и фильтрация
+      Поиск по названию: 4: VacancyService
+      Сортировка через Stream API: 4: VacancyService
+    section Аналитика
+      Вывод статистики (5 показателей): 5: VacancyService
+      Экспорт данных в CSV: 4: VacancyService
 ```
-
-### 5.2. Сборка исполняемого JAR
-```bash
-mvn clean package
-```
-Собранный артефакт: `target/hr-system-1.0.0-SNAPSHOT.jar`.
-
-### 5.3. Запуск варианта А: Локальный быстрый запуск (H2 In-Memory)
-Не требует установленного PostgreSQL или Docker:
-```bash
-java -Dspring.profiles.active=local -jar target/hr-system-1.0.0-SNAPSHOT.jar
-```
-*Или через Maven:*
-```bash
-mvn spring-boot:run -Dspring-boot.run.profiles=local
-```
-
-### 5.4. Запуск варианта Б: Полноценный запуск с PostgreSQL и Flyway (Docker)
-1. Поднимите контейнер PostgreSQL (достаточно только БД, GUI pgAdmin не обязателен):
-```bash
-docker compose up -d postgres
-```
-2. Запустите приложение:
-```bash
-java -jar target/hr-system-1.0.0-SNAPSHOT.jar
-```
-При запуске Flyway автоматически применит миграции `V1__init_schema.sql`, `V2__add_indexes.sql`, `V3__seed_initial_data.sql`, `V4__enum_columns_to_varchar.sql` и `V5__fix_telegram_sources.sql`.
-
-> Для парсинга Telegram нужны каналы с **публичным веб-превью** (`https://t.me/s/<канал>`). У несуществующего канала
-> или канала с закрытым превью Telegram отдаёт редирект на `t.me/<канал>` и страницу-заглушку с кодом 200 —
-> парсер распознаёт это и пишет понятную ошибку источника, а не «0 карточек без ошибок».
-
-> Если порт `5432` уже занят другой базой, скопируйте `.env.example` в `.env` и укажите свободный `DB_PORT`.
-> Этот файл читают и Docker Compose, и само приложение (`spring.config.import`), поэтому дополнительных
-> флагов при запуске не нужно:
-> ```bash
-> cp .env.example .env      # затем поправьте DB_PORT, например на 5436
-> docker compose up -d postgres
-> java -jar target/hr-system-1.0.0-SNAPSHOT.jar
-> ```
-> Файл `.env` добавлен в `.gitignore`, поэтому локальные порты не попадут в репозиторий.
-
-> Опционально: веб-интерфейс pgAdmin — `docker compose up -d pgadmin` (http://localhost:5050,
-> логин `admin@hrsystem.local` / `admin123`). Образ большой (170+ МБ), при обрыве загрузки Docker Hub
-> повторите команду.
 
 ---
 
-## 6. Исправления и улучшения (итерация 2)
+## 🚀 Как запустить проект
 
-| Проблема | Решение |
-|---|---|
-| В консоль выводились SQL-запросы и ошибки Hibernate | `show-sql: false`, отключены логгеры `org.hibernate`, `org.hibernate.SQL`, `org.hibernate.orm.jdbc.bind`; ошибки БД печатаются одной короткой строкой |
-| На PostgreSQL падали регистрация, каталог и отклики из-за несовпадения типов (ENUM в БД против VARCHAR в JPA) | Миграция `V4__enum_columns_to_varchar.sql` приводит enum-колонки к `VARCHAR(50)` |
-| Каталог вакансий падал с `function lower(bytea) does not exist` | Параметры-заглушки (`ALL`, `0`, `""`) вместо `NULL` в запросе `findWithFilters` |
-| Демо-данные появлялись только после выхода из CLI (каталог был пустым) | `SeedDataInitializer` запускается раньше CLI (`@Order(10)`) |
-| Этапы регистрации можно было пропустить, нажимая Enter | Все поля регистрации обязательные, пустой ввод переспрашивается, у полей есть нумерация шагов |
-| После регистрации открывалось стартовое меню вместо личного кабинета | Обработчики регистрации возвращают управление в `CliRunner` — кабинет открывается сразу |
-| «Детали вакансии» и «Откликнуться» не работали на PostgreSQL | Следствие исправления типов БД и запроса каталога; сценарий проверен сквозным тестом |
-| Ввод «рассыпался» из-за нескольких `Scanner` поверх `System.in` | `InputValidator` — единый Spring-бин для всех экранов |
-| Дублирование кода в CLI-экранах | `AbstractCliView` — общая база экранов, `RoleMenu` — полиморфный выбор меню по роли сессии |
-| Действия с ошибкой «выпадали» стек-трейсом и завершали программу | Все действия экранов обёрнуты в `safely(...)` — CLI продолжает работу |
-| Телефон, Telegram и ссылки сохранялись без проверки (принимались буквы и любой мусор) | Валидация ввода: телефон — 10–15 цифр (буквы отклоняются), Telegram — `@ник` из латиницы/цифр/`_`, ссылка — `http(s)://` или домен (автоматически получает `https://`) |
-| Парсинг Telegram возвращал 0 карточек и «ошибок: 0» одновременно | Каналы `java_jobs` и `it_vacancies` из V3 не существуют: Telegram отвечает редиректом и заглушкой с кодом 200. Миграция `V5` переводит источники на рабочие каналы (`java_jobs_ru`, `devjobs`, `vacancies_it`), а `TelegramMirrorScraper` проверяет публичное превью и сообщает ошибку источника |
-| Один Telegram-пост обрабатывался дважды (дубликаты) | Селектор брал и обёртку `.tgme_widget_message_wrap`, и вложенный `.tgme_widget_message` — теперь только обёртка |
-| Ссылка на пост подменялась первой ссылкой из текста (например, `hh.ru/vacancy/...`) | Адрес поста берётся из `data-post` (`https://t.me/<канал>/<номер>`) |
-| «Опыт от 2-х лет» превращался в зарплату «2 ₽» | Зарплата парсится только из выделенного поля (CSS-селектор на сайте, маркер 💰 в Telegram), а не из всего описания |
-| Заголовки Telegram-постов начинались с «#hh 1.» и тянули за собой зарплату и компанию | Заголовок — часть поста до первого маркера (💰/🏢/📍/📋), без хэштегов и нумерации; компания, город и стек берутся из своих маркеров |
+1. Настройте PostgreSQL на порту `5432`.
+2. Выполните SQL-скрипт `init.sql` в вашей базе данных.
+3. Откройте проект в IDE (IntelliJ IDEA) или запустите через Maven:
+   ```bash
+   mvn clean compile
+   mvn exec:java -Dexec.mainClass="com.hrsystem.Main"
+   ```
+
+## 🛡 Реализованные бизнес-правила (согласно требованиям)
+
+1. Нельзя создать запись без названия.
+2. Зарплата не может быть отрицательной.
+3. Максимальная зарплата не может быть меньше минимальной.
+4. Отсутствие записи с указанным ID обрабатывается без падения программы.
+5. Запрещенный переход статусов (нельзя перевести в архив вакансию, которая уже в архиве).
