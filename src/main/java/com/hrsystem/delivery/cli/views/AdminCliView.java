@@ -25,6 +25,15 @@ import java.util.List;
 @Component
 public class AdminCliView extends AbstractCliView implements RoleMenu {
 
+    private static final String MENU =
+            "[1] Запустить принудительный парсинг HTML-сайтов\n"
+                    + "[2] Запустить парсинг Telegram-каналов\n"
+                    + "[3] Управление списком источников (Добавить / вкл-выкл)\n"
+                    + "[4] Журнал логов парсинга\n"
+                    + "[5] Модерация каталога вакансий\n"
+                    + "[6] Блокировка учётных записей\n"
+                    + "[0] Выход в главное меню (Logout)";
+
     private final ModerationService moderationService;
     private final ScraperCoordinatorService scraperCoordinatorService;
     private final ParsingLogRepository parsingLogRepository;
@@ -60,13 +69,7 @@ public class AdminCliView extends AbstractCliView implements RoleMenu {
     public void open() {
         while (true) {
             safely(this::printDashboard);
-            out.println("[1] Запустить принудительный парсинг HTML-сайтов");
-            out.println("[2] Запустить парсинг Telegram-каналов");
-            out.println("[3] Управление списком источников (Добавить / вкл-выкл)");
-            out.println("[4] Журнал логов парсинга");
-            out.println("[5] Модерация каталога вакансий");
-            out.println("[6] Блокировка учётных записей");
-            out.println("[0] Выход в главное меню (Logout)");
+            out.println(MENU);
             switch (in.readIntInRange("Выберите команду > ", 0, 6)) {
                 case 1 -> safely(() -> runScraping(true));
                 case 2 -> safely(() -> runScraping(false));
@@ -85,14 +88,14 @@ public class AdminCliView extends AbstractCliView implements RoleMenu {
 
     private void printDashboard() {
         DashboardStatsDto stats = moderationService.getDashboardStats();
-        out.println("\n=== ПАНЕЛЬ УПРАВЛЕНИЯ ПАРСЕРАМИ И СБОРОМ ДАННЫХ ===");
-        out.println("Статистика базы данных:");
-        out.println("- Всего активных вакансий: " + stats.activeVacancies());
-        out.println("- Спарсено через Web Scraper: " + stats.websiteVacancies());
-        out.println("- Спарсено через Telegram Mirror: " + stats.telegramVacancies());
-        out.println("- Добавлено работодателями вручную: " + stats.manualVacancies());
-        out.println("- Последний сбор: " + stats.lastParsingStartedAt() + " (" + stats.lastParsingStatus() + ")");
-        out.println(LINE);
+        out.println("\n=== ПАНЕЛЬ УПРАВЛЕНИЯ ПАРСЕРАМИ И СБОРОМ ДАННЫХ ===\n"
+                + "Статистика базы данных:\n"
+                + "- Всего активных вакансий: " + stats.activeVacancies() + "\n"
+                + "- Спарсено через Web Scraper: " + stats.websiteVacancies() + "\n"
+                + "- Спарсено через Telegram Mirror: " + stats.telegramVacancies() + "\n"
+                + "- Добавлено работодателями вручную: " + stats.manualVacancies() + "\n"
+                + "- Последний сбор: " + stats.lastParsingStartedAt() + " (" + stats.lastParsingStatus() + ")\n"
+                + LINE);
     }
 
     private void runScraping(boolean website) {
@@ -102,23 +105,21 @@ public class AdminCliView extends AbstractCliView implements RoleMenu {
         ParsingReportDto report = website
                 ? scraperCoordinatorService.runWebsiteScraping(out::println)
                 : scraperCoordinatorService.runTelegramScraping(out::println);
-        out.println("\n=== ОТЧЁТ ПАРСИНГА ===");
-        out.println("Найдено:            " + report.getItemsFound());
-        out.println("Добавлено новых:    " + report.getItemsSaved());
-        out.println("Отсеяно дубликатов: " + report.getDuplicatesSkipped());
-        out.println("Ошибок источников:  " + report.getFailedSources());
-        if (report.getSummary() != null) {
-            out.println(report.getSummary());
-        }
+        out.println("\n=== ОТЧЁТ ПАРСИНГА ===\n"
+                + "Найдено:            " + report.getItemsFound() + "\n"
+                + "Добавлено новых:    " + report.getItemsSaved() + "\n"
+                + "Отсеяно дубликатов: " + report.getDuplicatesSkipped() + "\n"
+                + "Ошибок источников:  " + report.getFailedSources()
+                + (report.getSummary() != null ? "\n" + report.getSummary() : ""));
         pause();
     }
 
     private void manageSources() {
         while (true) {
             List<ParsingSourceEntity> sources = moderationService.listSources();
-            out.println("\n=== ИСТОЧНИКИ СБОРА ===");
-            out.println(tables.formatSources(sources));
-            out.println("[1] Добавить URL  [2] Включить/выключить  [0] Назад");
+            out.println("\n=== ИСТОЧНИКИ СБОРА ===\n"
+                    + tables.formatSources(sources)
+                    + "\n[1] Добавить URL  [2] Включить/выключить  [0] Назад");
             int action = in.readIntInRange("Действие > ", 0, 2);
             if (action == 0) {
                 return;
@@ -139,20 +140,20 @@ public class AdminCliView extends AbstractCliView implements RoleMenu {
 
     private void showLogs() {
         List<ParsingLogEntity> logs = parsingLogRepository.findTop20ByOrderByStartedAtDesc();
-        out.println("\n=== ЖУРНАЛ ПАРСИНГА ===");
-        out.println(tables.formatLogs(logs));
+        StringBuilder text = new StringBuilder("\n=== ЖУРНАЛ ПАРСИНГА ===\n").append(tables.formatLogs(logs));
         for (ParsingLogEntity log : logs) {
             if (log.getErrorMessage() != null && !log.getErrorMessage().isBlank()) {
-                out.println("Лог #" + log.getId() + " ошибка: " + log.getErrorMessage());
+                text.append("\nЛог #").append(log.getId()).append(" ошибка: ").append(log.getErrorMessage());
             }
         }
+        out.println(text);
     }
 
     private void moderateVacancies() {
         List<VacancyEntity> vacancies = moderationService.listRecentVacancies();
-        out.println("\n=== МОДЕРАЦИЯ ВАКАНСИЙ ===");
-        out.println(tables.formatVacancies(vacancies));
-        out.println("[1] В архив (скрыть)  [2] Отклонить  [3] Вернуть ACTIVE  [0] Назад");
+        out.println("\n=== МОДЕРАЦИЯ ВАКАНСИЙ ===\n"
+                + tables.formatVacancies(vacancies)
+                + "\n[1] В архив (скрыть)  [2] Отклонить  [3] Вернуть ACTIVE  [0] Назад");
         int action = in.readIntInRange("Действие > ", 0, 3);
         if (action == 0) {
             return;
@@ -168,9 +169,9 @@ public class AdminCliView extends AbstractCliView implements RoleMenu {
 
     private void moderateUsers() {
         List<UserEntity> users = moderationService.listUsers();
-        out.println("\n=== ПОЛЬЗОВАТЕЛИ ===");
-        out.println(tables.formatUsers(users));
-        out.println("[1] Заблокировать  [2] Разблокировать  [0] Назад");
+        out.println("\n=== ПОЛЬЗОВАТЕЛИ ===\n"
+                + tables.formatUsers(users)
+                + "\n[1] Заблокировать  [2] Разблокировать  [0] Назад");
         int action = in.readIntInRange("Действие > ", 0, 2);
         if (action == 0) {
             return;

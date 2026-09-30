@@ -54,8 +54,7 @@ public class EmployerCliView extends AbstractCliView implements RoleMenu {
         Long userId = sessionContext.getCurrentUserId();
         while (true) {
             header("КАБИНЕТ РАБОТОДАТЕЛЯ");
-            out.println(MENU);
-            out.println(LINE);
+            out.println(MENU + "\n" + LINE);
             switch (in.readIntInRange("Выберите действие > ", 0, 4)) {
                 case 1 -> safely(() -> listVacancies(employerId, userId));
                 case 2 -> safely(() -> createVacancy(employerId));
@@ -72,9 +71,9 @@ public class EmployerCliView extends AbstractCliView implements RoleMenu {
 
     private void listVacancies(Long employerId, Long userId) {
         List<EmployerVacancyRowDto> rows = employerService.listMyVacancies(employerId);
-        out.println("\n=== МОИ ВАКАНСИИ ===");
-        out.println(tables.formatEmployerVacancies(rows));
-        out.println("[1] Редактировать вилку/требования  [2] В архив  [3] Отклики  [0] Назад");
+        out.println("\n=== МОИ ВАКАНСИИ ===\n"
+                + tables.formatEmployerVacancies(rows)
+                + "\n[1] Редактировать вилку/требования  [2] В архив  [3] Отклики  [0] Назад");
         int action = in.readIntInRange("Выберите действие > ", 0, 3);
         if (action == 0 || rows.isEmpty()) {
             return;
@@ -139,8 +138,7 @@ public class EmployerCliView extends AbstractCliView implements RoleMenu {
 
     private void funnel(Long employerId, Long userId) {
         List<EmployerVacancyRowDto> rows = employerService.listMyVacancies(employerId);
-        out.println("\n=== ВЫБОР ВАКАНСИИ ДЛЯ ВОРОНКИ ===");
-        out.println(tables.formatEmployerVacancies(rows));
+        out.println("\n=== ВЫБОР ВАКАНСИИ ДЛЯ ВОРОНКИ ===\n" + tables.formatEmployerVacancies(rows));
         if (!rows.isEmpty()) {
             showFunnelForVacancy(employerId, userId, in.readLong("ID вакансии > "));
         }
@@ -150,9 +148,9 @@ public class EmployerCliView extends AbstractCliView implements RoleMenu {
         VacancyEntity vacancy = employerService.getOwnedVacancy(employerId, vacancyId);
         while (true) {
             List<ApplicationEntity> applications = employerService.getApplicationsForVacancy(employerId, vacancyId);
-            out.println("\n=== ОТКЛИКИ НА ВАКАНСИЮ #" + vacancy.getId() + ": " + vacancy.getTitle() + " ===");
-            out.println(tables.formatApplications(applications));
-            out.println("[1] Взять в работу (REVIEWING)  [2] Оффер (OFFER)  [3] Отклонить (REJECTED)  [0] Назад");
+            out.println("\n=== ОТКЛИКИ НА ВАКАНСИЮ #" + vacancy.getId() + ": " + vacancy.getTitle() + " ===\n"
+                    + tables.formatApplications(applications)
+                    + "\n[1] Взять в работу (REVIEWING)  [2] Оффер (OFFER)  [3] Отклонить (REJECTED)  [0] Назад");
             int action = in.readIntInRange("Выберите действие > ", 0, 3);
             if (action == 0) {
                 return;
@@ -178,11 +176,11 @@ public class EmployerCliView extends AbstractCliView implements RoleMenu {
 
     private void profile(Long employerId) {
         EmployerProfileEntity profile = employerService.getProfile(employerId);
-        out.println("\n=== ПРОФИЛЬ КОМПАНИИ ===");
-        out.println("Компания: " + dash(profile.getCompanyName()));
-        out.println("Контакт:  " + dash(profile.getContactPerson()));
-        out.println("Сайт:     " + dash(profile.getWebsiteUrl()));
-        out.println("Описание: " + dash(profile.getDescription()));
+        out.println("\n=== ПРОФИЛЬ КОМПАНИИ ===\n"
+                + "Компания: " + dash(profile.getCompanyName()) + "\n"
+                + "Контакт:  " + dash(profile.getContactPerson()) + "\n"
+                + "Сайт:     " + dash(profile.getWebsiteUrl()) + "\n"
+                + "Описание: " + dash(profile.getDescription()));
         if (!in.confirm("Изменить профиль?")) {
             return;
         }
