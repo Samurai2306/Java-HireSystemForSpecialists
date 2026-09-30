@@ -19,10 +19,10 @@
 
 ```mermaid
 flowchart TD
-    UI[Console UI\n(Main.java)]
-    Service[Business Logic\n(VacancyService.java)]
-    Repo[Data Access\n(VacancyRepository.java)]
-    DB[(PostgreSQL)]
+    UI["Console UI\n(Main.java)"]
+    Service["Business Logic\n(VacancyService.java)"]
+    Repo["Data Access\n(VacancyRepository.java)"]
+    DB[("PostgreSQL")]
 
     UI -- Ввод/Вывод --> Service
     Service -- Проверки & Бизнес-логика --> Repo
