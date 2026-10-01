@@ -64,11 +64,11 @@ public class Main {
         System.out.print("Компания: ");
         String company = scanner.nextLine().trim();
         
-        System.out.print("Зарплата от (можно пропустить): ");
+        System.out.print("Зарплата от: ");
         String minStr = scanner.nextLine().trim();
         java.math.BigDecimal min = minStr.isEmpty() ? null : new java.math.BigDecimal(minStr);
         
-        System.out.print("Зарплата до (можно пропустить): ");
+        System.out.print("Зарплата до: ");
         String maxStr = scanner.nextLine().trim();
         java.math.BigDecimal max = maxStr.isEmpty() ? null : new java.math.BigDecimal(maxStr);
         
