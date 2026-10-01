@@ -176,13 +176,36 @@ journey
 
 ## 🚀 Как запустить проект
 
-1. Настройте PostgreSQL на порту `5432`.
-2. Выполните SQL-скрипт `init.sql` в вашей базе данных.
-3. Откройте проект в IDE (IntelliJ IDEA) или запустите через Maven:
-   ```bash
-   mvn clean compile
-   mvn exec:java -Dexec.mainClass="com.hrsystem.Main"
-   ```
+### 1. Поднять базу данных
+
+В проекте есть `docker-compose.yml`, который запускает PostgreSQL и pgAdmin:
+
+```bash
+docker-compose up -d
+```
+
+Это создаст:
+- PostgreSQL на порту `5432` (база `hr_system_db`, пользователь `hr_user`, пароль `hr_password`)
+- pgAdmin на порту `5050` (логин `admin@hrsystem.local`, пароль `admin123`)
+
+> Если PostgreSQL уже стоит локально, docker не нужен — главное чтобы база, пользователь и пароль совпадали с тем, что в `DatabaseManager.java`.
+
+### 2. Создать таблицы и заполнить тестовыми данными
+
+```bash
+psql -h localhost -U hr_user -d hr_system_db -f init.sql
+```
+
+Или через pgAdmin: открыть `http://localhost:5050`, подключиться к серверу, открыть Query Tool и вставить содержимое `init.sql`.
+
+Скрипт создаст таблицы `users` и `vacancies`, добавит 5 пользователей и 10 вакансий.
+
+### 3. Собрать и запустить
+
+```bash
+mvn clean compile
+mvn exec:java -Dexec.mainClass="com.hrsystem.Main"
+```
 
 ## 🛡 Реализованные бизнес-правила (согласно требованиям)
 

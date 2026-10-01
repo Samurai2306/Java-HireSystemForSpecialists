@@ -1,8 +1,8 @@
 -- SQL-скрипт создания базы данных для КР1 (HR Система)
 
 -- Удаление таблиц, если они существуют (для чистого запуска)
-DROP TABLE IF EXISTS vacancies;
-DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS vacancies CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
 
 -- 1. Создание таблицы пользователей (Связанная сущность)
 CREATE TABLE users (

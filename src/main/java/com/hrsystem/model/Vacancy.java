@@ -16,7 +16,6 @@ public class Vacancy {
         this.companyName = companyName;
         this.salaryMin = salaryMin;
         this.salaryMax = salaryMax;
-        // строку из базы переводим в enum, если не подошла — ставим ACTIVE
         try {
             this.status = VacancyStatus.valueOf(statusStr);
         } catch (IllegalArgumentException | NullPointerException e) {
@@ -46,7 +45,6 @@ public class Vacancy {
     public VacancyStatus getStatus() { return status; }
     public void setStatus(VacancyStatus status) { this.status = status; }
 
-    // красивый вывод в консоль
     public void printFormatted() {
         System.out.printf("[%4d] %-20s | %-15s | От: %-10s | До: %-10s | Статус: %s%n",
                 id, title, companyName, 

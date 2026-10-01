@@ -19,9 +19,7 @@ import java.util.List;
 import java.util.stream.Collectors; 
 
 public class VacancyService {
-    // работаем через интерфейс, а не конкретный класс — полиморфизм
     private final CrudRepository<Vacancy, Long> repository;
-    // конкретная ссылка нужна для updateStatus, его в интерфейсе нет
     private final VacancyRepository vacancyRepository;
 
     public VacancyService(VacancyRepository repository) {

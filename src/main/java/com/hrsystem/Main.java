@@ -7,7 +7,6 @@ import java.util.Scanner;
 
 public class Main {
     
-    // Собираем всё руками, Spring тут не нужен
     private static final VacancyRepository repository = new VacancyRepository();
     private static final VacancyService service = new VacancyService(repository);
     private static final Scanner scanner = new Scanner(System.in);
@@ -35,7 +34,6 @@ public class Main {
                     default -> System.out.println("Нет такой команды, попробуйте ещё раз.");
                 }
             } catch (Exception e) {
-                // ловим ошибки, чтобы программа не падала
                 System.err.println("Ошибка: " + e.getMessage());
             }
         }
@@ -65,11 +63,11 @@ public class Main {
         String company = scanner.nextLine().trim();
         
         System.out.print("Зарплата от: ");
-        String minStr = scanner.nextLine().trim();
+        String minStr = scanner.nextLine().trim().replaceAll("\\s+", "");
         java.math.BigDecimal min = minStr.isEmpty() ? null : new java.math.BigDecimal(minStr);
         
         System.out.print("Зарплата до: ");
-        String maxStr = scanner.nextLine().trim();
+        String maxStr = scanner.nextLine().trim().replaceAll("\\s+", "");
         java.math.BigDecimal max = maxStr.isEmpty() ? null : new java.math.BigDecimal(maxStr);
         
         service.addVacancy(title, company, min, max);
@@ -84,7 +82,6 @@ public class Main {
     
     private static void archiveVacancy() {
         System.out.print("ID вакансии: ");
-        // если ввели буквы вместо цифр — ругаемся
         try {
             Long id = Long.parseLong(scanner.nextLine().trim());
             service.archiveVacancy(id);
