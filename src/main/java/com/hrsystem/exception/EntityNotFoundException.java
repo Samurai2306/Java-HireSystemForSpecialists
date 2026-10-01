@@ -1,7 +1,7 @@
 package com.hrsystem.exception;
 
 /**
- * Требование КР1: Собственные исключения.
+ * Кидаем, когда запись не нашлась в базе по id.
  */
 public class EntityNotFoundException extends BusinessException {
     public EntityNotFoundException(String message) {

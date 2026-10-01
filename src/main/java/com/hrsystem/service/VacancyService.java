@@ -16,12 +16,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.stream.Collectors; 
 
 public class VacancyService {
-    // Требование КР1: Полиморфизм. Работаем через интерфейс CrudRepository, а не конкретный класс
+    // работаем через интерфейс, а не конкретный класс — полиморфизм
     private final CrudRepository<Vacancy, Long> repository;
-    // Оставляем конкретную ссылку для методов, которых нет в интерфейсе (например, updateStatus)
+    // конкретная ссылка нужна для updateStatus, его в интерфейсе нет
     private final VacancyRepository vacancyRepository;
 
     public VacancyService(VacancyRepository repository) {
@@ -31,20 +31,20 @@ public class VacancyService {
 
     public void addVacancy(String title, String companyName, java.math.BigDecimal salaryMin, java.math.BigDecimal salaryMax) {
         if (title == null || title.trim().isEmpty()) {
-            throw new BusinessException("Название вакансии не может быть пустым."); // Требование КР1: Собственные исключения
+            throw new BusinessException("Название пустое, так нельзя.");
         }
         if (salaryMin != null && salaryMin.compareTo(java.math.BigDecimal.ZERO) < 0) {
-            throw new BusinessException("Зарплата не может быть отрицательной.");
+            throw new BusinessException("Зарплата не бывает отрицательной.");
         }
         if (salaryMin != null && salaryMax != null && salaryMax.compareTo(salaryMin) < 0) {
-            throw new BusinessException("Максимальная зарплата не может быть меньше минимальной.");
+            throw new BusinessException("Верхняя граница зарплаты меньше нижней, проверьте цифры.");
         }
 
         Vacancy vacancy = new Vacancy(title, companyName, salaryMin, salaryMax, VacancyStatus.ACTIVE);
         try {
             repository.create(vacancy);
         } catch (SQLException e) {
-            System.err.println("Ошибка БД при создании вакансии: " + e.getMessage());
+            System.err.println("Не удалось сохранить вакансию: " + e.getMessage());
         }
     }
 
@@ -52,7 +52,7 @@ public class VacancyService {
         try {
             List<Vacancy> vacancies = repository.findAll();
             if (vacancies.isEmpty()) {
-                System.out.println("Список вакансий пуст.");
+                System.out.println("Вакансий пока нет.");
                 return;
             }
             
@@ -61,7 +61,7 @@ public class VacancyService {
                     .forEach(Vacancy::printFormatted);
                     
         } catch (SQLException e) {
-            System.err.println("Ошибка БД при получении вакансий: " + e.getMessage());
+            System.err.println("Не получилось загрузить вакансии: " + e.getMessage());
         }
     }
 
@@ -73,12 +73,12 @@ public class VacancyService {
                     .collect(Collectors.toList());
             
             if (filtered.isEmpty()) {
-                System.out.println("По запросу '" + keyword + "' ничего не найдено.");
+                System.out.println("По '" + keyword + "' ничего нет.");
             } else {
                 filtered.forEach(Vacancy::printFormatted);
             }
         } catch (SQLException e) {
-            System.err.println("Ошибка БД: " + e.getMessage());
+            System.err.println("Проблема с базой: " + e.getMessage());
         }
     }
     
@@ -86,22 +86,22 @@ public class VacancyService {
         try {
             Vacancy v = repository.findById(id);
             if (v == null) {
-                throw new EntityNotFoundException("Вакансия с ID " + id + " не найдена.");
+                throw new EntityNotFoundException("Нет вакансии с ID " + id + ".");
             }
             if (v.getStatus() == VacancyStatus.ARCHIVED) {
-                throw new BusinessException("Вакансия уже находится в архиве.");
+                throw new BusinessException("Она и так в архиве.");
             }
             
             vacancyRepository.updateStatus(id, VacancyStatus.ARCHIVED.name());
-            System.out.println("Вакансия успешно перенесена в архив.");
+            System.out.println("Перенесли в архив.");
             
         } catch (SQLException e) {
-            System.err.println("Ошибка БД: " + e.getMessage());
+            System.err.println("Проблема с базой: " + e.getMessage());
         }
     }
 
     public void printStatistics() {
-        System.out.println("\n=== СТАТИСТИКА СИСТЕМЫ ===");
+        System.out.println("\n=== Статистика ===");
         
         String sql = """
                 SELECT 
@@ -117,15 +117,15 @@ public class VacancyService {
              ResultSet rs = pstmt.executeQuery()) {
 
             if (rs.next()) {
-                System.out.printf("Всего пользователей: %d%n", rs.getInt("total_users"));
-                System.out.printf("Всего вакансий: %d%n", rs.getInt("total_vacancies"));
-                System.out.printf("Активных вакансий: %d%n", rs.getInt("active_vacancies"));
-                System.out.printf("Добавлено вручную: %d%n", rs.getInt("manual_vacancies"));
+                System.out.printf("Пользователей: %d%n", rs.getInt("total_users"));
+                System.out.printf("Вакансий: %d%n", rs.getInt("total_vacancies"));
+                System.out.printf("Из них активных: %d%n", rs.getInt("active_vacancies"));
+                System.out.printf("Добавлено руками: %d%n", rs.getInt("manual_vacancies"));
                 System.out.printf("Спарсено: %d%n", rs.getInt("parsed_vacancies"));
             }
 
         } catch (SQLException e) {
-            System.err.println("Ошибка выполнения SQL-запроса: " + e.getMessage());
+            System.err.println("Не удалось получить статистику: " + e.getMessage());
         }
     }
 
@@ -160,10 +160,10 @@ public class VacancyService {
                 count++;
             }
             
-            System.out.println("[OK] Успешно экспортировано " + count + " записей в файл: " + filePath);
+            System.out.println("Выгружено " + count + " записей в " + filePath);
 
         } catch (Exception e) {
-            System.err.println("Ошибка при экспорте данных: " + e.getMessage());
+            System.err.println("Не получилось выгрузить CSV: " + e.getMessage());
         }
     }
 }

@@ -4,8 +4,8 @@ import java.sql.SQLException;
 import java.util.List;
 
 /**
- * Требование КР1: Использование минимум одного интерфейса.
- * Демонстрирует абстракцию доступа к данным.
+ * Общий интерфейс для работы с любой сущностью в БД.
+ * Конкретные репозитории его реализуют.
  */
 public interface CrudRepository<T, ID> {
     void create(T entity) throws SQLException;

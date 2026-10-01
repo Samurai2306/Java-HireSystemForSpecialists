@@ -1,7 +1,7 @@
 package com.hrsystem.exception;
 
 /**
- * Требование КР1: Собственные исключения.
+ * Ошибка бизнес-логики: невалидные данные, запрещённые переходы и т.д.
  */
 public class BusinessException extends RuntimeException {
     public BusinessException(String message) {

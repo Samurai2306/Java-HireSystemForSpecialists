@@ -16,11 +16,11 @@ public class Vacancy {
         this.companyName = companyName;
         this.salaryMin = salaryMin;
         this.salaryMax = salaryMax;
-        // Конвертируем строку из БД в Enum (Полиморфизм/Инкапсуляция)
+        // строку из базы переводим в enum, если не подошла — ставим ACTIVE
         try {
             this.status = VacancyStatus.valueOf(statusStr);
         } catch (IllegalArgumentException | NullPointerException e) {
-            this.status = VacancyStatus.ACTIVE; // По умолчанию
+            this.status = VacancyStatus.ACTIVE;
         }
     }
 
@@ -46,7 +46,7 @@ public class Vacancy {
     public VacancyStatus getStatus() { return status; }
     public void setStatus(VacancyStatus status) { this.status = status; }
 
-    // Метод вывода форматирован строго как в лекции (printf)
+    // красивый вывод в консоль
     public void printFormatted() {
         System.out.printf("[%4d] %-20s | %-15s | От: %-10s | До: %-10s | Статус: %s%n",
                 id, title, companyName, 

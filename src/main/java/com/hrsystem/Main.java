@@ -7,13 +7,13 @@ import java.util.Scanner;
 
 public class Main {
     
-    // Инициализируем зависимости вручную (как требовалось в КР1, без Spring)
+    // Собираем всё руками, Spring тут не нужен
     private static final VacancyRepository repository = new VacancyRepository();
     private static final VacancyService service = new VacancyService(repository);
     private static final Scanner scanner = new Scanner(System.in);
 
     public static void main(String[] args) {
-        System.out.println("=== ИНФОРМАЦИОННАЯ СИСТЕМА HR (Режим КР1) ===");
+        System.out.println("=== HR-система — управление вакансиями ===");
         
         boolean running = true;
         while (running) {
@@ -29,13 +29,13 @@ public class Main {
                     case "5" -> service.printStatistics();
                     case "6" -> service.exportToCsv();
                     case "0" -> {
-                        System.out.println("Завершение работы...");
+                        System.out.println("Выходим...");
                         running = false;
                     }
-                    default -> System.out.println("Ошибка: Неизвестная команда.");
+                    default -> System.out.println("Нет такой команды, попробуйте ещё раз.");
                 }
             } catch (Exception e) {
-                // Обработка бизнес-исключений (Требование КР1: Программа не должна падать)
+                // ловим ошибки, чтобы программа не падала
                 System.err.println("Ошибка: " + e.getMessage());
             }
         }
@@ -45,51 +45,51 @@ public class Main {
         System.out.print("""
                 
                 ========================================
-                          МЕНЮ УПРАВЛЕНИЯ (КР 1)
+                            ГЛАВНОЕ МЕНЮ
                 ========================================
-                1. Добавить вакансию (Создание)
-                2. Вывести все вакансии (Сортировка)
-                3. Поиск вакансий по названию (Фильтрация)
-                4. Убрать вакансию в архив (Изменение)
-                5. Статистика (5 показателей)
-                6. Экспорт данных в CSV
+                1. Новая вакансия
+                2. Все вакансии
+                3. Поиск по названию
+                4. В архив
+                5. Статистика
+                6. Выгрузить в CSV
                 0. Выход
-                Выберите действие:\s""");
+                > \s""");
     }
 
     private static void addVacancy() {
-        System.out.print("Введите название вакансии: ");
+        System.out.print("Название вакансии: ");
         String title = scanner.nextLine().trim();
         
-        System.out.print("Введите название компании: ");
+        System.out.print("Компания: ");
         String company = scanner.nextLine().trim();
         
-        System.out.print("Зарплата От (оставьте пустым если нет): ");
+        System.out.print("Зарплата от (можно пропустить): ");
         String minStr = scanner.nextLine().trim();
         java.math.BigDecimal min = minStr.isEmpty() ? null : new java.math.BigDecimal(minStr);
         
-        System.out.print("Зарплата До (оставьте пустым если нет): ");
+        System.out.print("Зарплата до (можно пропустить): ");
         String maxStr = scanner.nextLine().trim();
         java.math.BigDecimal max = maxStr.isEmpty() ? null : new java.math.BigDecimal(maxStr);
         
         service.addVacancy(title, company, min, max);
-        System.out.println("Вакансия успешно добавлена!");
+        System.out.println("Готово, вакансия добавлена.");
     }
 
     private static void searchVacancy() {
-        System.out.print("Введите ключевое слово для поиска: ");
+        System.out.print("Что ищем: ");
         String keyword = scanner.nextLine().trim();
         service.searchByTitle(keyword);
     }
     
     private static void archiveVacancy() {
-        System.out.print("Введите ID вакансии для архивации: ");
-        // Обработка неверного ввода (буквы вместо цифр)
+        System.out.print("ID вакансии: ");
+        // если ввели буквы вместо цифр — ругаемся
         try {
             Long id = Long.parseLong(scanner.nextLine().trim());
             service.archiveVacancy(id);
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("ID должен быть целым числом.");
+            throw new IllegalArgumentException("ID — это число, а не текст.");
         }
     }
 }
