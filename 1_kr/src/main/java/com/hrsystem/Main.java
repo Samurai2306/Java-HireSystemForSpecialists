@@ -55,6 +55,7 @@ public class Main {
                 > \s""");
     }
 
+
     private static void addVacancy() {
         System.out.print("Название вакансии: ");
         String title = scanner.nextLine().trim();
@@ -79,6 +80,7 @@ public class Main {
         String keyword = scanner.nextLine().trim();
         service.searchByTitle(keyword);
     }
+    
     
     private static void archiveVacancy() {
         System.out.print("ID вакансии: ");
